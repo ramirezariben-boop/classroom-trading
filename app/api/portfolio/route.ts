@@ -1,44 +1,26 @@
 // app/api/portfolio/route.ts
-import { NextResponse } from 'next/server'
-import { prisma } from '../../../lib/prisma'
-import { readSessionFromHeaders } from '../../../lib/auth'
+import { NextResponse } from "next/server";
+import { prisma } from "../../../lib/prisma";
+import { readSessionFromHeaders } from "../../../lib/auth";
 
-
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const { uid } = readSessionFromHeaders(req.headers)
+    // 👇 ahora se espera (await) y no se le pasa req.headers
+    const { uid } = await readSessionFromHeaders();
 
     const [user, positions, txs] = await Promise.all([
       prisma.user.findUnique({ where: { id: uid } }),
       prisma.position.findMany({ where: { userId: uid } }),
-      prisma.tx.findMany({
-        where: { userId: uid },
-        orderBy: { ts: 'desc' },
-        take: 100,
-      }),
-    ])
-
-    if (!user) {
-      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
-    }
+      prisma.transaction.findMany({ where: { userId: uid }, orderBy: { ts: "desc" }, take: 100 }),
+    ]);
 
     return NextResponse.json({
-      points: Number(user.points),
-      positions: positions.map((p) => ({
-        userId: p.userId,
-        valueId: p.valueId,
-        qty: p.qty,
-      })),
-      txs: txs.map((t) => ({
-        id: t.id,
-        ts: t.ts.toISOString(),
-        type: t.type,                 // 'BUY' | 'SELL' | 'TRANSFER_IN' | 'TRANSFER_OUT'
-        valueId: t.valueId ?? undefined,
-        qty: t.qty ?? undefined,
-        deltaPts: Number(t.deltaPts),
-      })),
-    })
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      points: user?.points ?? 0,
+      positions,
+      txs,
+    });
+  } catch (e: any) {
+    const msg = e?.message === "unauthorized" ? 401 : 500;
+    return new Response(e?.message || "error", { status: msg });
   }
 }
