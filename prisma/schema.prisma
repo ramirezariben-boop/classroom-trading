@@ -1,0 +1,52 @@
+// prisma/schema.prisma
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+model User {
+  id        String   @id            // tu ID asignado (ej. ana01)
+  name      String
+  codeHash  String                  // hash del código/clave
+  points    Decimal  @default(1000)
+  createdAt DateTime @default(now())
+  positions Position[]
+  txs       Tx[]
+  outTxfs   Transfer[] @relation("outgoing")
+  inTxfs    Transfer[] @relation("incoming")
+}
+
+model Position {
+  id      String  @id @default(cuid())
+  userId  String
+  valueId String
+  qty     Int
+  user    User    @relation(fields: [userId], references: [id])
+  @@unique([userId, valueId])
+}
+
+model Tx {
+  id       String   @id @default(cuid())
+  userId   String
+  ts       DateTime @default(now())
+  type     String   // BUY | SELL | TRANSFER_IN | TRANSFER_OUT
+  valueId  String?
+  qty      Int?
+  deltaPts Decimal   // +/- puntos
+  user     User     @relation(fields: [userId], references: [id])
+}
+
+model Transfer {
+  id        String   @id @default(cuid())
+  fromId    String
+  toId      String
+  amount    Decimal
+  ts        DateTime @default(now())
+  fromUser  User     @relation("outgoing", fields: [fromId], references: [id])
+  toUser    User     @relation("incoming", fields: [toId], references: [id])
+}
