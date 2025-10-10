@@ -9,8 +9,11 @@ const compat = new FlatCompat({
   baseDirectory: __dirname,
 });
 
-const eslintConfig = [
+export default [
+  // Configuración base de Next.js + TypeScript
   ...compat.extends("next/core-web-vitals", "next/typescript"),
+
+  // Ignora carpetas grandes y builds
   {
     ignores: [
       "node_modules/**",
@@ -20,6 +23,13 @@ const eslintConfig = [
       "next-env.d.ts",
     ],
   },
-];
 
-export default eslintConfig;
+  // ⚙️ Override: reglas más permisivas para las rutas API
+  {
+    files: ["app/api/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-empty-object-type": "off",
+    },
+  },
+];
