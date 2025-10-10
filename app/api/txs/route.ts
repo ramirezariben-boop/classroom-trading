@@ -1,13 +1,14 @@
 // app/api/txs/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { readSessionFromHeaders } from "@/lib/auth";
-import { prisma } from "@/lib/prisma"; // <-- activar Prisma
+import { prisma } from "@/lib/prisma";
 
 type TxType = "BUY" | "SELL" | "RESET" | "TRANSFER_IN" | "TRANSFER_OUT";
 
 export async function GET(req: NextRequest) {
   try {
-    const { uid, role } = readSessionFromHeaders(req.headers);
+    // readSessionFromHeaders ahora es async y no recibe headers
+    const { uid, role } = await readSessionFromHeaders();
     const scope = (req.nextUrl.searchParams.get("scope") ?? "me") as "me" | "all";
 
     if (scope === "all") {
@@ -54,6 +55,8 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     console.error("GET /api/txs error:", e);
+    // Si la sesión falta/expiró, nuestra lib lanza "unauthorized"; si quieres,
+    // podrías detectar ese mensaje y responder 401. Por ahora dejamos 500 genérico.
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

@@ -7,7 +7,7 @@ type Mode = 'BUY' | 'SELL'
 
 export async function POST(req: Request) {
   try {
-    const { uid } = readSessionFromHeaders(req.headers)
+    const { uid } = await readSessionFromHeaders();
     const { mode, valueId, qty, price } = await req.json()
 
     // Validaciones básicas
@@ -78,13 +78,9 @@ export async function POST(req: Request) {
       })
     })
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true });
   } catch (e: any) {
-    const msg =
-      e?.message === 'saldo' ? 'Saldo insuficiente' :
-      e?.message === 'pos'   ? 'No tienes suficiente posición' :
-      e?.message === '404'   ? 'Usuario no encontrado' :
-      'Error'
-    return NextResponse.json({ error: msg }, { status: 400 })
+    const msg = e?.message === "unauthorized" ? 401 : 500;
+    return new Response(e?.message || "error", { status: msg });
   }
 }

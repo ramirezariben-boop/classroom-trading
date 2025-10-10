@@ -6,7 +6,7 @@ import { readSessionFromHeaders } from '../../../lib/auth'
 
 export async function POST(req: Request) {
   try {
-    const { uid } = readSessionFromHeaders(req.headers)
+    const { uid } = readSessionFromHeaders()
     const { toUserId, amount } = await req.json()
 
     const nAmount = Number(amount)
@@ -31,12 +31,9 @@ export async function POST(req: Request) {
       await tx.tx.create({ data: { userId: toUserId, type: 'TRANSFER_IN',  deltaPts:  nAmount } })
     })
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true });
   } catch (e: any) {
-    const msg =
-      e?.message === 'saldo' ? 'Saldo insuficiente' :
-      e?.message === '404'   ? 'Usuario no encontrado' :
-      'Error'
-    return NextResponse.json({ error: msg }, { status: 400 })
+    const code = e?.message === "unauthorized" ? 401 : 500;
+    return new Response(e?.message || "error", { status: code });
   }
 }
