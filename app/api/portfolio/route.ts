@@ -6,16 +6,16 @@ export async function GET() {
   try {
     const { uid } = await readSessionFromHeaders();
 
-    const [user, positions] = await Promise.all([
+    const [user, positions, txs] = await Promise.all([
       prisma.user.findUnique({ where: { id: uid } }),
       prisma.position.findMany({ where: { userId: uid } }),
+      prisma.tx.findMany({ where: { userId: uid }, orderBy: { ts: "desc" }, take: 100 }),
     ]);
 
-    // Dejamos las txs vacías por ahora (las puedes pedir a /api/txs)
     return NextResponse.json({
       points: user?.points ?? 0,
       positions,
-      txs: [],
+      txs,
     });
   } catch (e: any) {
     const msg = e?.message === "unauthorized" ? 401 : 500;
