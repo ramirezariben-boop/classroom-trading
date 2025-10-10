@@ -1,58 +1,41 @@
-// app/api/login/route.ts
-import { NextResponse } from 'next/server'
-import { prisma } from '../../../lib/prisma'
-import { signSession } from '../../../lib/auth'
-// Si validas pin/hash, descomenta bcrypt:
-// import bcrypt from 'bcrypt'
+import { NextResponse } from "next/server";
+import { signSession } from "../../../lib/auth";
+// Si usas Prisma, descomenta y ajusta:
+// import { prisma } from "../../../lib/prisma";
 
-// Lee ADMIN_IDS del .env para resolver el rol
-function resolveRole(userId: string): 'ADMIN' | 'USER' {
-  const raw = process.env.ADMIN_IDS || ''
-  const ids = raw.split(',').map(s => s.trim()).filter(Boolean)
-  return ids.includes(userId) ? 'ADMIN' : 'USER'
-}
+const ADMINS = (process.env.ADMIN_IDS || "")
+  .split(",")
+  .map(s => s.trim())
+  .filter(Boolean);
 
 export async function POST(req: Request) {
-  const { userId, code } = await req.json()
+  try {
+    const { userId, code } = await req.json();
 
-  if (!userId || !code) {
-    return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
+    // TODO: valida credenciales reales; por ahora aceptamos cualquier combo no vacío
+    if (!userId || !code) {
+      return new NextResponse("missing credentials", { status: 400 });
+    }
+
+    // Si usas una tabla de usuarios:
+    // const user = await prisma.user.findUnique({ where: { id: userId } });
+    // if (!user) return new NextResponse("invalid user", { status: 401 });
+
+    const role: "ADMIN" | "USER" = ADMINS.includes(userId) ? "ADMIN" : "USER";
+    const user = { id: userId, name: userId }; // placeholder si no lees de BD
+
+    // 1) arma la respuesta JSON
+    const res = NextResponse.json({
+      ok: true,
+      user: { id: user.id, name: user.name, role }, // la UI necesita el role
+    });
+
+    // 2) firma sesión y agrega cookie a la respuesta
+    signSession(res, { uid: user.id, role });
+
+    // 3) devuelve la respuesta (con cookie)
+    return res;
+  } catch (e) {
+    return new NextResponse("error", { status: 500 });
   }
-
-  // Busca al usuario en BD
-  const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user) {
-    return NextResponse.json({ error: 'Usuario no existe' }, { status: 401 })
-  }
-
-  // === Validación del código ===
-  // Opción 1: texto plano (si guardas el code como string en BD)
-  if ((user as any).code && (user as any).code !== code) {
-    return NextResponse.json({ error: 'Clave incorrecta' }, { status: 401 })
-  }
-
-  // Opción 2: hash (si tienes user.codeHash)
-  // const ok = await bcrypt.compare(code, user.codeHash)
-  // if (!ok) return NextResponse.json({ error: 'Clave incorrecta' }, { status: 401 })
-
-  // Resuelve rol por .env
-  const role = resolveRole(user.id)
-
-  // Firma cookie de sesión con role
-  const token = signSession({ uid: user.id, name: user.name, role })
-  const res = NextResponse.json({
-    ok: true,
-    user: { id: user.id, name: user.name, role }, // <-- la UI necesita este role
-  })
-
-  // Setea cookie
-  res.cookies.set('ct_session', token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: 60 * 60 * 24 * 7,
-  })
-
-  return res
 }
