@@ -1,7 +1,7 @@
 // app/api/admin/users/route.ts
 import { NextResponse } from "next/server";
 // Ajusta el import según dónde esté tu prisma:
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/prisma";
 // Si tu prisma está en "@/lib/prisma", usa ese path
 import { requireAdmin } from "@/lib/auth";
 import bcrypt from "bcrypt";
