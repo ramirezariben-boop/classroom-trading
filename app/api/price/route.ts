@@ -3,12 +3,13 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const STEP_PERIOD_MS_DEFAULT = 5000; // cada 5s reales
-const MAX_STEPS_PER_REQUEST = 1;     
+const MAX_STEPS_PER_REQUEST = 1;     // evita encadenar pasos en una sola request
 
 // ===== Catálogo base =====
 const DEFAULTS: Record<string, number> = {
@@ -32,17 +33,26 @@ type Signals = {
   volatility?: number;
 };
 
-// ===== Estado en memoria (persistente entre requests) =====
-const state = {
+// ===== Estado en memoria (persiste entre requests/reloads) =====
+type State = {
+  lastPrices: Map<string, number>;
+  candlesBase: Map<string, Candle[]>;
+  lastDayKey: string;
+  lastBaseline: Map<string, number>;
+  lastFactorsKey: string;
+  lastTick: number;
+};
+
+const state: State = (globalThis as any).__PRICE_STATE__ ?? ((globalThis as any).__PRICE_STATE__ = {
   lastPrices: new Map<string, number>(),
   candlesBase: new Map<string, Candle[]>(),
   lastDayKey: "",
   lastBaseline: new Map<string, number>(),
   lastFactorsKey: "",
   lastTick: 0,
-};
+});
 
-// ===== Utilidades =====
+// ===== Utils =====
 function randn() {
   let u = 0, v = 0;
   while (u === 0) u = Math.random();
@@ -60,7 +70,7 @@ async function readJsonSafe<T = any>(...parts: string[]): Promise<T | null> {
   }
 }
 
-// ===== Leer factors.json =====
+// ===== Factors =====
 function loadFactors() {
   try {
     const filePath = path.join(process.cwd(), "data", "factors.json");
@@ -71,28 +81,19 @@ function loadFactors() {
   }
 }
 
-// ===== Señales: archivo real -> público -> endpoint -> defaults =====
+// ===== Signals: data -> public -> endpoint -> defaults =====
 async function loadSignals(): Promise<Signals> {
-  // 1) /data/signals.json
   const fromData = await readJsonSafe<Partial<Signals>>("data", "signals.json");
   if (fromData) return withSignalDefaults(fromData);
 
-  // 2) /public/signals.json
   const fromPublic = await readJsonSafe<Partial<Signals>>("public", "signals.json");
   if (fromPublic) return withSignalDefaults(fromPublic);
 
-  // 3) /api/signals (misma app)
   try {
     const res = await fetch("http://localhost:3000/api/signals", { cache: "no-store" });
-    if (res.ok) {
-      const data = (await res.json()) as Partial<Signals>;
-      return withSignalDefaults(data);
-    }
-  } catch {
-    // ignorar y caer al default
-  }
+    if (res.ok) return withSignalDefaults(await res.json());
+  } catch {}
 
-  // 4) Defaults
   return withSignalDefaults({});
 }
 
@@ -111,7 +112,7 @@ function withSignalDefaults(s: Partial<Signals>): Signals {
 
 // ===== Baseline diario =====
 function computeDailyBaseline(sig: Signals, factors: any) {
-  const A = 0.35, B = 0.45, C = 0.06;
+  const A = 0.35, /*B = 0.45,*/ C = 0.06; // B eliminado (sin efecto workers)
   const R = sig.redemptionsScore ?? 0;
   const Y = sig.youtubeScore ?? 0;
 
@@ -121,10 +122,9 @@ function computeDailyBaseline(sig: Signals, factors: any) {
   for (const [id, base] of Object.entries(mergedBases)) {
     let mu = base * (1 + R + Y);
 
-    // 🔹 Quitamos la influencia de "workers"
+    // Acciones: SIN influencia de "workers"
     if (["baumxp", "dsgmxp", "rftmxp"].includes(id)) {
-      // Antes: mu *= 1 + B * ((s - 70) / 30);
-      // Ahora: nada, se queda como está
+      // mu = mu;
     } else if (["krimxp", "grmmxp", "litmxp", "hormxp", "gkrimi", "ggramm", "glit", "ghor"].includes(id)) {
       const d = sig.demand[id] ?? 0;
       mu *= 1 + C * Math.tanh(d / 10);
@@ -134,24 +134,46 @@ function computeDailyBaseline(sig: Signals, factors: any) {
 
     baseline.set(id, mu);
   }
-
   return baseline;
 }
 
-
-// ===== Velas =====
+// ===== Velas (persistencia con Prisma) =====
 function pushBaseCandle(id: string, price: number, now: number, candleMs: number) {
   const arr = state.candlesBase.get(id) ?? [];
   const last = arr[arr.length - 1];
 
-  if (!last || now - last.time >= candleMs) {
-    arr.push({ time: now, open: price, high: price, low: price, close: price });
-  } else {
-    if (price > last.high) last.high = price;
-    if (price < last.low)  last.low  = price;
-    last.close = price;
+  const openNew = !last || now - last.time >= candleMs;
+
+  if (openNew) {
+    const candle = { time: now, open: price, high: price, low: price, close: price };
+    arr.push(candle);
+    state.candlesBase.set(id, arr.slice(-1000));
+
+    // Guarda SOLO cuando abre una vela nueva
+    void prisma.candle.create({
+      data: {
+        valueId: id,
+        time: BigInt(candle.time),
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+      },
+    }).catch(() => {});
+    return;
   }
+
+  // Actualiza vela abierta en memoria
+  if (price > last.high) last.high = price;
+  if (price < last.low)  last.low  = price;
+  last.close = price;
   state.candlesBase.set(id, arr.slice(-1000));
+
+  // (Opcional) refleja actualización intra-vela en DB
+  void prisma.candle.update({
+    where: { valueId_time: { valueId: id, time: BigInt(last.time) } },
+    data: { high: last.high, low: last.low, close: last.close },
+  }).catch(() => {});
 }
 
 export async function GET() {
@@ -172,16 +194,40 @@ export async function GET() {
     basePrices: factors.basePrices ?? {},
   });
 
-  // 1) Recalcular baseline si cambia día o factors
+  // Precarga últimas N velas desde DB si el cache está vacío
+  const PRELOAD = 144; // ~24h si candle≈10 min
+  if (state.candlesBase.size === 0) {
+    for (const id of Object.keys(DEFAULTS)) {
+      try {
+        const rows = await prisma.candle.findMany({
+          where: { valueId: id },
+          orderBy: { time: "asc" },
+          take: PRELOAD,
+        });
+        if (rows.length) {
+          state.candlesBase.set(
+            id,
+            rows.map(r => ({
+              time: Number(r.time),
+              open: r.open, high: r.high, low: r.low, close: r.close,
+            }))
+          );
+          const last = rows[rows.length - 1];
+          state.lastPrices.set(id, last.close);
+        }
+      } catch {}
+    }
+  }
+
+  // Recalcular baseline si cambia día o factors (y resetear reloj)
   if (dayKey !== state.lastDayKey || fKey !== state.lastFactorsKey) {
     state.lastBaseline = computeDailyBaseline(sig, factors);
     state.lastDayKey = dayKey;
     state.lastFactorsKey = fKey;
     state.lastTick = now;
 
-    // primera siembra
-    if (state.lastTick === 0) {
-      state.lastTick = now;
+    // Si no hay precios cargados (ni DB ni memoria), sembrar con baseline + guardar una vela
+    if (state.lastPrices.size === 0) {
       for (const [id, mu] of state.lastBaseline.entries()) {
         state.lastPrices.set(id, mu);
         pushBaseCandle(id, mu, now, candleMs);
@@ -189,50 +235,43 @@ export async function GET() {
     }
   }
 
-  // 2) Avanzar ticks SOLO si ya pasó stepPeriodMs
+  // Avanzar ticks SOLO si ya pasó stepPeriodMs
   if (state.lastTick === 0) state.lastTick = now;
   let steps = Math.floor((now - state.lastTick) / stepPeriodMs);
   if (steps > MAX_STEPS_PER_REQUEST) steps = MAX_STEPS_PER_REQUEST;
   if (steps < 0) steps = 0;
-  steps = Math.min(1, steps);
 
-  // Dinámica con media-reversión (OU)
-  const k = 0.20;                 // fuerza de re-versión por tick (0–1)
+  // OU params
+  const k = 0.20;                 // fuerza de reversión por tick (0–1)
   const sigma = VOLATILITY * 0.06;
+  const stepCap = 0.02;           // Máx ±2% por tick
 
-for (let s = 0; s < steps; s++) {
-  const tNow = state.lastTick + (s + 1) * stepPeriodMs;
+  for (let s = 0; s < steps; s++) {
+    const tNow = state.lastTick + (s + 1) * stepPeriodMs;
 
-  for (const [id, baseDefault] of Object.entries(DEFAULTS)) {
-    const mu = state.lastBaseline.get(id) ?? baseDefault;
+    for (const [id, baseDefault] of Object.entries(DEFAULTS)) {
+      const mu = state.lastBaseline.get(id) ?? baseDefault;
+      const prev = state.lastPrices.get(id) ?? mu;
 
-    // 1) prev primero
-    const prev = state.lastPrices.get(id) ?? mu;
+      const bandLo = prev * (1 - stepCap);
+      const bandHi = prev * (1 + stepCap);
 
-    // 2) luego la banda cap por paso (ej. 5%)
-    const stepCap = 0.05; // prueba 0.02–0.05
-    const bandLo = prev * (1 - stepCap);
-    const bandHi = prev * (1 + stepCap);
+      const drift = k * (mu - prev);
+      const noise = mu * sigma * randn();
+      let next = prev + drift + noise;
 
-    // 3) OU step
-    const drift = k * (mu - prev);
-    const noise = mu * sigma * randn();
-    let next = prev + drift + noise;
+      if (next < bandLo) next = bandLo;
+      if (next > bandHi) next = bandHi;
 
-    // 4) clamp
-    if (next < bandLo) next = bandLo;
-    if (next > bandHi) next = bandHi;
-
-    next = +(next.toFixed(mu < 2 ? 4 : 2));
-    state.lastPrices.set(id, next);
-    pushBaseCandle(id, next, tNow, candleMs);
+      next = +(next.toFixed(mu < 2 ? 4 : 2));
+      state.lastPrices.set(id, next);
+      pushBaseCandle(id, next, tNow, candleMs);
+    }
   }
-}
 
-  // actualiza el reloj SOLO si avanzaste
   if (steps > 0) state.lastTick += steps * stepPeriodMs;
 
-  // 3) Serializa
+  // Serializa
   const PRICES: Record<string, number> = {};
   for (const [id, baseDefault] of Object.entries(DEFAULTS)) {
     const mu = state.lastBaseline.get(id) ?? baseDefault;

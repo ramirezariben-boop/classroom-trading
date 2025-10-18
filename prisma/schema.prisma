@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -63,4 +64,17 @@ model Transfer {
   @@index([ts])
   @@index([fromId, ts])
   @@index([toId, ts])
+}
+
+model Candle {
+  id       String  @id @default(cuid())
+  valueId  String
+  time     BigInt
+  open     Float
+  high     Float
+  low      Float
+  close    Float
+
+  @@unique([valueId, time])
+  @@index([valueId, time])
 }
