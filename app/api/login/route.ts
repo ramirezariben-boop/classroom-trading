@@ -1,41 +1,58 @@
+// app/api/login/route.ts
 import { NextResponse } from "next/server";
-import { signSession } from "../../../lib/auth";
-// Si usas Prisma, descomenta y ajusta:
-// import { prisma } from "../../../lib/prisma";
+import bcrypt from "bcrypt";
+import { prisma } from "@/lib/prisma";
 
-const ADMINS = (process.env.ADMIN_IDS || "")
-  .split(",")
-  .map(s => s.trim())
-  .filter(Boolean);
+// Deriva el rol desde ADMIN_IDS (sin tocar la DB)
+function roleOf(id: string): "ADMIN" | "USER" {
+  const list = (process.env.ADMIN_IDS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list.includes(id) ? "ADMIN" : "USER";
+}
 
 export async function POST(req: Request) {
   try {
     const { userId, code } = await req.json();
 
-    // TODO: valida credenciales reales; por ahora aceptamos cualquier combo no vacío
     if (!userId || !code) {
-      return new NextResponse("missing credentials", { status: 400 });
+      return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
     }
 
-    // Si usas una tabla de usuarios:
-    // const user = await prisma.user.findUnique({ where: { id: userId } });
-    // if (!user) return new NextResponse("invalid user", { status: 401 });
-
-    const role: "ADMIN" | "USER" = ADMINS.includes(userId) ? "ADMIN" : "USER";
-    const user = { id: userId, name: userId }; // placeholder si no lees de BD
-
-    // 1) arma la respuesta JSON
-    const res = NextResponse.json({
-      ok: true,
-      user: { id: user.id, name: user.name, role }, // la UI necesita el role
+    // Buscar usuario en la base de datos
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
     });
 
-    // 2) firma sesión y agrega cookie a la respuesta
-    signSession(res, { uid: user.id, role });
+    if (!user) {
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    }
 
-    // 3) devuelve la respuesta (con cookie)
+    // Comparar la clave ingresada con el hash guardado
+    const ok = await bcrypt.compare(code, user.codeHash);
+    if (!ok) {
+      return NextResponse.json({ error: "Clave incorrecta" }, { status: 401 });
+    }
+
+    // Derivar rol (por .env)
+    const role = roleOf(user.id);
+
+    const res = NextResponse.json({
+      ok: true,
+      user: { id: user.id, name: user.name, role },
+    });
+
+    // Guardar cookie
+    res.cookies.set(
+      "ct_session",
+      JSON.stringify({ id: user.id, role }),
+      { httpOnly: true, path: "/" }
+    );
+
     return res;
-  } catch (e) {
-    return new NextResponse("error", { status: 500 });
+  } catch (e: any) {
+    console.error(e);
+    return NextResponse.json({ error: e.message || "Error en login" }, { status: 500 });
   }
 }

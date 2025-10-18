@@ -1,28 +1,30 @@
+// app/api/signals/route.ts
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 
-const SIGNALS_PATH = path.join(process.cwd(), "data", "signals.json");
-
+/**
+ * Señales de ejemplo. Sustitúyelas luego con
+ * tus datos reales (participaciones, tareas, YouTube, canjeos…).
+ */
 export async function GET() {
-  try {
-    const raw = await fs.readFile(SIGNALS_PATH, "utf8");
-    // Evitar cache en Vercel/Next
-    const res = NextResponse.json(JSON.parse(raw));
-    res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    res.headers.set("Pragma", "no-cache");
-    res.headers.set("Expires", "0");
-    return res;
-  } catch (e) {
-    // Si no existe o está mal, devuelve valores seguros por defecto
-    const fallback = {
-      groupAvg: 75,
-      workers: { baumxp: 80, dsgmxp: 70, rftmxp: 85 },
-      demand: {},
-      participations: { SON: 0, SAM: 0, expected: 35, eta: 0.04 }
-    };
-    const res = NextResponse.json(fallback);
-    res.headers.set("Cache-Control", "no-store");
-    return res;
-  }
+  // Ejemplo estable por día: cambia poco en cada petición
+  const todayKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  // Puedes traer esto de DB; por ahora son parámetros "tuneables"
+  const signals = {
+    groupAvg: 78, // desempeño grupo (0–100)
+    workers: { baumxp: 82, dsgmxp: 74, rftmxp: 88 }, // por valor
+    demand: { krimxp: 12, grmmxp: 6, litmxp: 10, hormxp: 4 }, // demanda reciente
+    participations: {
+      SON: 28,            // # asistentes domingo
+      SAM: 31,            // # asistentes sábado
+      expected: 35,       // esperado
+      eta: 0.05,          // sensibilidad de divisas SON/SAM
+    },
+    // “modificadores” directos (canjeos, favores, etc.) — agrega lo que gustes:
+    redemptionsScore: 0.02,  // +2% en general por canjeos altos (ejemplo)
+    youtubeScore: 0.03,      // +3% si tus métricas subieron (ejemplo)
+    dayKey: todayKey,
+  };
+
+  return NextResponse.json(signals, { status: 200 });
 }

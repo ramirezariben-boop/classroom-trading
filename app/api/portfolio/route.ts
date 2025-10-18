@@ -1,24 +1,19 @@
+// app/api/portfolio/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from "../../../lib/prisma";
-import { readSessionFromHeaders } from "../../../lib/auth";
+
+// Datos en memoria para demo
+let demoPortfolio = {
+  points: 1500,
+  positions: [
+    { userId: "ana01", valueId: "baumxp", qty: 3 },
+    { userId: "ana01", valueId: "litmxp", qty: 2 },
+  ],
+  txs: [
+    { id: "t1", ts: new Date().toISOString(), type: "BUY", valueId: "baumxp", qty: 3, deltaPts: -435 },
+    { id: "t2", ts: new Date().toISOString(), type: "BUY", valueId: "litmxp", qty: 2, deltaPts: -140 },
+  ],
+};
 
 export async function GET() {
-  try {
-    const { uid } = await readSessionFromHeaders();
-
-    const [user, positions, txs] = await Promise.all([
-      prisma.user.findUnique({ where: { id: uid } }),
-      prisma.position.findMany({ where: { userId: uid } }),
-      prisma.tx.findMany({ where: { userId: uid }, orderBy: { ts: "desc" }, take: 100 }),
-    ]);
-
-    return NextResponse.json({
-      points: user?.points ?? 0,
-      positions,
-      txs,
-    });
-  } catch (e: any) {
-    const msg = e?.message === "unauthorized" ? 401 : 500;
-    return new Response(e?.message || "error", { status: msg });
-  }
+  return NextResponse.json(demoPortfolio);
 }

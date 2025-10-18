@@ -1,6 +1,6 @@
 {
   "groupAvg": 78,
-  "workers": { "baumxp": 88, "dsgmxp": 74, "rftmxp": 91 },
-  "demand":  { "krimxp": 12, "grmmxp": 5, "litmxp": 2, "hormxp": 1 },
+  "workers": { "baumxp": 100, "dsgmxp": 100, "rftmxp": 100 },
+  "demand":  { "krimxp": 12, "grmmxp": 40, "litmxp": 50, "hormxp": 1 },
   "participations": { "SON": 50, "SAM": 20, "expected": 35, "eta": 0.04 }
 }

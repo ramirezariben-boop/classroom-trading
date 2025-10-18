@@ -33,7 +33,7 @@ export type ApiUser = { id: string; name: string; role: "ADMIN" | "USER" };
 const DEFAULT_CATEGORIES: Category[] = [
   { id: "aktien", name: "Aktien", description: "Projekte" },
   { id: "materialien", name: "Materialien", description: "PDFs" },
-  { id: "wahrungen", name: "Währungen", description: "Gruppen" },
+  { id: "wahrungen", name: "Währungen", description: "Grupos" },
   { id: "werte", name: "Werte", description: "Puntos" },
   { id: "zehntel", name: "Zehntel", description: "Décimas" },
   { id: "guter", name: "Güter", description: "Mercancías" },
@@ -42,14 +42,14 @@ const DEFAULT_CATEGORIES: Category[] = [
 
 const DEFAULT_VALUES: Value[] = [
   // Aktien
-  { id: "baumxp", categoryId: "aktien", name: "BAUMXP", description: "Bauunternehmen", price: 145, changePct: 0, updatedAt: 0 },
+  { id: "baumxp", categoryId: "aktien", name: "BAUMXP", description: "Bauunternehmen", price: 100, changePct: 0, updatedAt: 0 },
   { id: "dsgmxp", categoryId: "aktien", name: "DSGMXP", description: "Aufgabendesign", price: 100, changePct: 0, updatedAt: 0 },
-  { id: "rftmxp", categoryId: "aktien", name: "RFTMXP", description: "Referate", price: 110, changePct: 0, updatedAt: 0 },
+  { id: "rftmxp", categoryId: "aktien", name: "RFTMXP", description: "Referate", price: 100, changePct: 0, updatedAt: 0 },
   // Materialien
-  { id: "krimxp", categoryId: "materialien", name: "KRIMXP", description: "Krimis", price: 50, changePct: 0, updatedAt: 0 },
+  { id: "krimxp", categoryId: "materialien", name: "KRIMXP", description: "Krimis", price: 40, changePct: 0, updatedAt: 0 },
   { id: "grmmxp", categoryId: "materialien", name: "GRMMXP", description: "Grammatik", price: 40, changePct: 0, updatedAt: 0 },
-  { id: "litmxp", categoryId: "materialien", name: "LITMXP", description: "Literatur", price: 70, changePct: 0, updatedAt: 0 },
-  { id: "hormxp", categoryId: "materialien", name: "HORMXP", description: "Hörverstehen", price: 85, changePct: 0, updatedAt: 0 },
+  { id: "litmxp", categoryId: "materialien", name: "LITMXP", description: "Literatur", price: 50, changePct: 0, updatedAt: 0 },
+  { id: "hormxp", categoryId: "materialien", name: "HORMXP", description: "Hörverstehen", price: 55, changePct: 0, updatedAt: 0 },
   // Währungen
   { id: "sonmxp", categoryId: "wahrungen", name: "SONMXP", description: "Valor de los puntos del domingo", price: 1, changePct: 0, updatedAt: 0 },
   { id: "sammxp", categoryId: "wahrungen", name: "SAMMXP", description: "Valor de los puntos del sábado", price: 1, changePct: 0, updatedAt: 0 },
@@ -59,154 +59,32 @@ const DEFAULT_VALUES: Value[] = [
   { id: "wbtmxp", categoryId: "werte", name: "WBTMXP", description: "Valor de los puntos del domingo", price: 1, changePct: 0, updatedAt: 0 },
   { id: "wxhmxp", categoryId: "werte", name: "WXHMXP", description: "Valor de los puntos del sábado", price: 1, changePct: 0, updatedAt: 0 },
   // Zehntel
-  { id: "zhnmxp", categoryId: "zehntel", name: "ZHNMXP", description: "Valor de la décima", price: 20, changePct: 0, updatedAt: 0 },
+  { id: "zhnmxp", categoryId: "zehntel", name: "ZHNMXP", description: "Valor de la décima", price: 12, changePct: 0, updatedAt: 0 },
   { id: "anlmxp", categoryId: "zehntel", name: "ANLMXP", description: "Bonos", price: 1, changePct: 0, updatedAt: 0 },
   // Güter
-  { id: "gzehntel", categoryId: "guter", name: "Zehntel", description: "Décima", price: 20, changePct: 0, updatedAt: 0 },
-  { id: "gkrimi", categoryId: "guter", name: "Krimi", description: "Krimi", price: 50, changePct: 0, updatedAt: 0 },
+  { id: "gzehntel", categoryId: "guter", name: "Zehntel", description: "Décima", price: 12, changePct: 0, updatedAt: 0 },
+  { id: "gkrimi", categoryId: "guter", name: "Krimi", description: "Krimi", price: 40, changePct: 0, updatedAt: 0 },
   { id: "ggramm", categoryId: "guter", name: "Grammatik", description: "Grammatik", price: 40, changePct: 0, updatedAt: 0 },
-  { id: "glit", categoryId: "guter", name: "Literatur", description: "Literatur", price: 70, changePct: 0, updatedAt: 0 },
-  { id: "ghor", categoryId: "guter", name: "Hörverstehen", description: "Hörverstehen", price: 85, changePct: 0, updatedAt: 0 },
+  { id: "glit", categoryId: "guter", name: "Literatur", description: "Literatur", price: 50, changePct: 0, updatedAt: 0 },
+  { id: "ghor", categoryId: "guter", name: "Hörverstehen", description: "Hörverstehen", price: 55, changePct: 0, updatedAt: 0 },
 ];
 
-// ==== Temporalidades ====
-type Timeframe = { id: string; label: string; candleMs: number; tickMs: number };
+// ==== Temporalidades (solo re-muestreo visual; NO altera velocidad de velas) ====
+type Timeframe = { id: string; label: string; candleMs: number };
+
+const M = 60_000;
+const H = 60 * M;
+const D = 24 * H;
+const W = 7 * D;
+
 const TIMEFRAMES: Timeframe[] = [
-  { id: "5s", label: "5 s", candleMs: 5_000, tickMs: 1_000 },
-  { id: "10s", label: "10 s", candleMs: 10_000, tickMs: 1_000 },
-  { id: "30s", label: "30 s", candleMs: 30_000, tickMs: 1_000 },
-  { id: "1m", label: "1 m", candleMs: 60_000, tickMs: 2_000 },
+  { id: "5m",  label: "5 m",  candleMs: 5 * M },
+  { id: "15m", label: "15 m", candleMs: 15 * M },
+  { id: "1h",  label: "1 h",  candleMs: 1 * H },
+  { id: "4h",  label: "4 h",  candleMs: 4 * H },
+  { id: "1d",  label: "1 D",  candleMs: 1 * D },
+  { id: "1w",  label: "1 S",  candleMs: 1 * W },
 ];
-
-// ==== RNG determinista ====
-function mulberry32(a: number) {
-  return function () {
-    let t = (a += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// Normal(0,1) aproximado
-function gauss(rand: () => number) {
-  let u = 0, v = 0;
-  while (u === 0) u = rand();
-  while (v === 0) v = rand();
-  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-}
-
-// ==== Metadatos por valor/categoría (bandas móviles) ====
-type Kind = "aktie" | "material" | "waehrung" | "zehntel" | "other";
-
-const VALUE_META: Record<
-  string,
-  {
-    kind: Kind;
-    base: number;
-    // ancho de banda alrededor de μ: usa uno de los dos
-    bandAbsWidth?: number;   // eje. ±0.05
-    bandPctWidth?: number;   // eje. ±0.05 = ±5%
-  }
-> = {
-  // Materiales (±25% alrededor de μ como ejemplo)
-  krimxp: { kind: "material", base: 50, bandPctWidth: 0.25 },
-  grmmxp: { kind: "material", base: 40, bandPctWidth: 0.25 },
-  litmxp: { kind: "material", base: 70, bandPctWidth: 0.25 },
-  hormxp: { kind: "material", base: 85, bandPctWidth: 0.25 },
-
-  // Aktien (±30%)
-  baumxp: { kind: "aktie", base: 145, bandPctWidth: 0.30 },
-  dsgmxp: { kind: "aktie", base: 100, bandPctWidth: 0.30 },
-  rftmxp: { kind: "aktie", base: 110, bandPctWidth: 0.30 },
-
-  // Währungen (tu ejemplo: ±0.05 alrededor de μ)
-  sonmxp: { kind: "waehrung", base: 1, bandAbsWidth: 0.05 },
-  sammxp: { kind: "waehrung", base: 1, bandAbsWidth: 0.05 },
-
-  // Otros valores (±25%)
-  wgrmxp: { kind: "other", base: 1, bandPctWidth: 0.25 },
-  waumxp: { kind: "other", base: 1, bandPctWidth: 0.25 },
-  wbtmxp: { kind: "other", base: 1, bandPctWidth: 0.25 },
-  wxhmxp: { kind: "other", base: 1, bandPctWidth: 0.25 },
-
-  // Zehntel (±20%)
-  zhnmxp: { kind: "zehntel", base: 20, bandPctWidth: 0.20 },
-  anlmxp: { kind: "other", base: 1, bandPctWidth: 0.20 },
-
-  // Güter
-  gzehntel: { kind: "other", base: 20, bandPctWidth: 0.20 },
-  gkrimi:   { kind: "material", base: 50, bandPctWidth: 0.25 },
-  ggramm:   { kind: "material", base: 40, bandPctWidth: 0.25 },
-  glit:     { kind: "material", base: 70, bandPctWidth: 0.25 },
-  ghor:     { kind: "material", base: 85, bandPctWidth: 0.25 },
-};
-
-function metaFor(id: string) {
-  return VALUE_META[id.toLowerCase()] ?? { kind: "other" as Kind, base: 50, bandPctWidth: 0.3 };
-}
-
-// ==== Señales externas ====
-type Signals = {
-  // promedio del grupo (0–100) -> Zehntel
-  groupAvg: number;
-  // desempeño "trabajadores" (0–100) -> Aktien
-  workers: Record<string, number>;
-  // demanda reciente (conteo suave por valor) -> Materiales
-  demand: Record<string, number>;
-  // participaciones por sesión -> Währungen
-  participations: { SON: number; SAM: number; expected: number; eta: number };
-};
-
-// Calcula la media dinámica μ según reglas de negocio
-function dynamicMean(id: string, base: number, price: number, sig: Signals) {
-  const kind = metaFor(id).kind;
-
-  // coeficientes (ajusta a gusto)
-  const alphaZehntel = 0.35;  // sensibilidad al promedio del grupo
-  const betaAktien   = 0.45;  // sensibilidad al desempeño de "trabajadores"
-  const gammaMat     = 0.06;  // sensibilidad a demanda (conteo suave)
-
-  let mu = base;
-
-  if (kind === "zehntel") {
-    // Promedio 75 = base; >75 sube, <75 baja
-    const z = (sig.groupAvg - 75) / 25;
-    mu = base * (1 + alphaZehntel * z);
-  } else if (kind === "aktie") {
-    const s = (sig.workers[id] ?? 70);
-    const z = (s - 70) / 30;
-    mu = base * (1 + betaAktien * z);
-  } else if (kind === "material") {
-    const d = sig.demand[id] ?? 0;
-    mu = base * (1 + gammaMat * Math.tanh(d / 10));
-  } else if (kind === "waehrung") {
-    // Valor por participaciones: más que las esperadas -> diluye; menos -> aprecia
-    const { SON, SAM, expected, eta } = sig.participations;
-    const isSON = id.toLowerCase() === "sonmxp";
-    const count = isSON ? SON : SAM;
-    const ratio = Math.max(0.2, Math.min(2, expected / Math.max(1, count || 1)));
-    mu = base * Math.pow(ratio, eta);
-  }
-
-  return mu;
-}
-
-function dynamicBandAroundMu(id: string, mu: number) {
-  const m = metaFor(id);
-  if (m.bandAbsWidth != null) {
-    const w = Math.max(0, m.bandAbsWidth);
-    return [mu - w, mu + w] as [number, number];
-  }
-  const p = Math.max(0, m.bandPctWidth ?? 0.2);
-  return [mu * (1 - p), mu * (1 + p)] as [number, number];
-}
-
-function reflectIntoRange(x: number, min: number, max: number) {
-  if (x < min) return min + (min - x); // rebote
-  if (x > max) return max - (x - max); // rebote
-  return x;
-}
 
 // ==== Componente principal ====
 export default function Page() {
@@ -216,16 +94,35 @@ export default function Page() {
   const [student, setStudent] = useState<{ name: string; points: number }>({ name: "Alumno Demo", points: 1000 });
 
   const [categories] = useState<Category[]>(DEFAULT_CATEGORIES);
-  const [values, setValues] = useState<Record<string, Value>>(() => Object.fromEntries(DEFAULT_VALUES.map((v) => [v.id, v])));
+  const [values, setValues] = useState<Record<string, Value>>(
+    () => Object.fromEntries(DEFAULT_VALUES.map((v) => [v.id, v]))
+  );
   const [txs, setTxs] = useState<Tx[]>([]);
+
+  // (no se usa para el chart, lo dejo por si lo ocupas después)
   const [history, setHistory] = useState<Record<string, Candle[]>>({});
+
+  // ✅ Siembra inicial en BASE: una vela por valor (para resampling local del modal)
+  const [candlesBase, setCandlesBase] = useState<Record<string, Candle[]>>(() => {
+    const now = Date.now();
+    return Object.fromEntries(
+      DEFAULT_VALUES.map((v) => [
+        v.id,
+        [{ time: now, open: v.price, high: v.price, low: v.price, close: v.price }],
+      ])
+    );
+  });
+
   const [trade, setTrade] = useState<{ mode: "BUY" | "SELL"; valueId: string } | null>(null);
   const [qty, setQty] = useState(1);
   const [chartFor, setChartFor] = useState<string | null>(null);
-  const [tf, setTf] = useState<Timeframe>(TIMEFRAMES[3]); // por defecto 1m
+  const [tf, setTf] = useState<Timeframe>(TIMEFRAMES[0]); // por defecto 5m
   const selected = chartFor ? values[chartFor] : null;
 
-  const fmt = useMemo(() => new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), []);
+  const fmt = useMemo(
+    () => new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    []
+  );
 
   const [txScope, setTxScope] = useState<"me" | "all">("me");
 
@@ -238,151 +135,125 @@ export default function Page() {
 
   // Login modal
   const [loginOpen, setLoginOpen] = useState(false);
-  const [loginId, setLoginId] = useState("");     // ID del alumno (ej. ana01)
-  const [loginCode, setLoginCode] = useState(""); // Clave/pin (ej. GATO-92)
+  const [loginId, setLoginId] = useState("");
+  const [loginCode, setLoginCode] = useState("");
 
   // NEW: transferencias
   const [transferTo, setTransferTo] = useState("");
   const [transferAmount, setTransferAmount] = useState<number>(0);
 
-  // ==== Señales (estado) ====
-  const [signals, setSignals] = useState<Signals>({
-    groupAvg: 75,
-    workers: { baumxp: 80, dsgmxp: 70, rftmxp: 85 },
-    demand: {},
-    participations: { SON: 0, SAM: 0, expected: 35, eta: 0.04 },
-  });
+  // ==== Factores (leídos de archivo/endpoint) ====
+  type Factors = {
+    views24hPct?: number;             // ejemplo: 14  -> +14% / 24h
+    coeff?: Record<string, number>;   // sensibilidad por categoría
+    note?: string;
+    updatedAt?: string;
+  };
+  const [factors, setFactors] = useState<Factors | null>(null);
 
   useEffect(() => setMounted(true), []);
 
-  // Sembrar vela inicial
+  // === Resampling para el modal (visual: no cambia el motor de velas)
+const derivedCandles = useMemo(() => {
+  if (!chartFor) return [];
+  const base = history?.[chartFor] ?? [];
+  return resample(base, tf.candleMs);
+}, [chartFor, history, tf]);
 
-// === Polling de señales desde /api/signals con pausa por visibilidad ===
-const SIGNALS_POLL_MS = 4000; // prod: 3000–5000ms; admin: 1000–2000ms
+  // === Polling de factores: primero intenta /api/factors; si no existe, cae a /factors.txt (en /public)
+  useEffect(() => {
+    let stop = false;
 
-useEffect(() => {
-  let timer: any = null;
-  let stopped = false;
-
-  async function loadSignals() {
-    try {
-      const res = await fetch("/api/signals", { cache: "no-store" });
-      if (!stopped && res.ok) {
-        const json = await res.json();
-        setSignals((prev) => ({
-          ...prev,
-          ...json,
-          workers: { ...(prev.workers || {}), ...(json.workers || {}) },
-          demand:  { ...(prev.demand  || {}), ...(json.demand  || {})  },
-          participations: { ...(prev.participations || {}), ...(json.participations || {}) },
-        }));
+    async function loadFactors() {
+      try {
+        // 1) intenta /api/factors
+        let res = await fetch("/api/factors", { cache: "no-store" });
+        if (!res.ok) {
+          // 2) intenta /factors.txt en /public
+          res = await fetch("/factors.txt", { cache: "no-store" });
+        }
+        if (res.ok) {
+          const json = await res.json();
+          if (!stop) setFactors(json);
+        }
+      } catch {
+        // ignore si no existe aún
       }
-    } catch { /* ignore */ }
-  }
+      if (!stop) setTimeout(loadFactors, 10000); // refresca cada 10 s
+    }
 
-  function schedule() {
-    clearInterval(timer);
-    if (document.visibilityState === "visible") {
-      timer = setInterval(loadSignals, SIGNALS_POLL_MS);
-      // arranque rápido
-      loadSignals();
+    loadFactors();
+    return () => { stop = true; };
+  }, []);
+
+// ⬇️ único efecto de precios
+useEffect(() => {
+  if (!mounted) return;
+
+  let timer: any;
+  const POLL_MS = 7000; // 7 s fijo
+
+  async function tick() {
+    try {
+      const res = await fetch("/api/price", { cache: "no-store" });
+      if (!res.ok) return;
+
+      const data = await res.json() as {
+        prices: Record<string, number>;
+        candlesBase?: Record<string, Candle[]>;
+        ts: number;
+      };
+      const now = data.ts || Date.now();
+
+      setValues(prev => {
+        const next = { ...prev };
+        for (const id of Object.keys(next)) {
+          const old = next[id];
+          const p = data.prices[id] ?? old.price;
+          const changePct = +(((p - old.price) / Math.max(1e-9, old.price)) * 100).toFixed(2);
+          next[id] = { ...old, price: p, changePct, updatedAt: now };
+        }
+        return next;
+      });
+
+      if (data.candlesBase) {
+        setHistory(prev => {
+          const merged: Record<string, Candle[]> = { ...prev };
+          for (const [vid, arr] of Object.entries(data.candlesBase)) {
+            merged[vid] = arr.slice(-100);
+          }
+          return merged;
+        });
+      }
+    } catch (e) {
+      // NO logueamos "Failed to fetch" si hay cortes breves
+      // console.debug(e);
     }
   }
 
-  // arranca y maneja visibilidad
-  schedule();
-  const onVis = () => schedule();
-  document.addEventListener("visibilitychange", onVis);
-
-  return () => {
-    stopped = true;
-    clearInterval(timer);
-    document.removeEventListener("visibilitychange", onVis);
-  };
-}, []);
+  tick(); // primer fetch inmediato
+  timer = setInterval(tick, POLL_MS);
+  return () => clearInterval(timer);
+}, [mounted]);
 
 
-  useEffect(() => {
-    if (!mounted) return;
-    const now = Date.now();
-    setHistory((prev) => {
-      const next = { ...prev } as Record<string, Candle[]>;
-      for (const v of Object.values(values)) {
-        if (!next[v.id] || next[v.id].length === 0) {
-          next[v.id] = [{ time: now, open: v.price, high: v.price, low: v.price, close: v.price }];
-        }
+
+  function resample(candles: Candle[], tfMs: number): Candle[] {
+    if (!candles?.length) return [];
+    const buckets = new Map<number, Candle>();
+    for (const c of candles) {
+      const k = Math.floor(c.time / tfMs) * tfMs;
+      const b = buckets.get(k);
+      if (!b) {
+        buckets.set(k, { time: k, open: c.open, high: c.high, low: c.low, close: c.close });
+      } else {
+        if (c.high > b.high) b.high = c.high;
+        if (c.low < b.low) b.low = c.low;
+        b.close = c.close;
       }
-      return next;
-    });
-  }, [mounted, values]);
-
-  // ==== Simulador dependiente de la temporalidad con OU + banda móvil ====
-  useEffect(() => {
-    if (!mounted) return;
-    const rand = mulberry32(42 + tf.candleMs); // semilla depende del TF (opcional)
-
-    const id = setInterval(() => {
-      setValues((prev) => {
-        const next: Record<string, Value> = { ...prev };
-        const now = Date.now();
-
-        setHistory((prevHist) => {
-          const newHist: Record<string, Candle[]> = { ...prevHist };
-
-
-          for (const vid of Object.keys(next)) {
-            const v = next[vid];
-            const { base } = metaFor(vid);
-
-            // 1) valor real dinámico por señales
-            const mu = dynamicMean(vid, base, v.price, signals);
-
-            // 2) banda móvil centrada en μ
-            const [lo, hi] = dynamicBandAroundMu(vid, mu);
-
-            // OU discreto: reversión + ruido proporcional
-            const dt = tf.tickMs / 60_000; // escala por minuto
-            const kappa = 0.45;            // ↑ vuelve más rápido a μ si sube
-            const sigma = 0.08;            // volatilidad relativa
-
-            const noise = sigma * v.price * gauss(rand) * Math.sqrt(Math.max(1e-3, dt));
-            let newPrice = v.price + kappa * (mu - v.price) * dt + noise;
-
-            // reflexión + clamp en la banda móvil
-            newPrice = reflectIntoRange(newPrice, lo, hi);
-            newPrice = Math.max(lo, Math.min(hi, newPrice));
-
-            const p2 = +newPrice.toFixed(2);
-            next[vid] = {
-              ...v,
-              price: p2,
-              changePct: +(((p2 - v.price) / v.price) * 100).toFixed(2),
-              updatedAt: now,
-            };
-
-            const candles = newHist[vid] ? [...newHist[vid]] : [];
-            const last = candles[candles.length - 1];
-
-            if (!last || now - last.time > tf.candleMs) {
-              candles.push({ time: now, open: p2, high: p2, low: p2, close: p2 });
-            } else {
-              last.close = p2;
-              if (p2 > last.high) last.high = p2;
-              if (p2 < last.low) last.low = p2;
-            }
-
-            newHist[vid] = candles.slice(-100);
-          }
-
-          return newHist;
-        });
-
-        return next;
-      });
-    }, tf.tickMs);
-
-    return () => clearInterval(id);
-  }, [mounted, tf, signals]);
+    }
+    return Array.from(buckets.values()).sort((a, b) => a.time - b.time).slice(-300);
+  }
 
   // ==== Helpers API (login + portfolio + trade + transfer) ====
   async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
@@ -413,7 +284,6 @@ useEffect(() => {
       setLoginId("");
       setLoginCode("");
       await refreshPortfolio();
-      // si es ADMIN, cambia a "all" y carga todas
       if (result.user.role === "ADMIN") {
         setTxScope("all");
         const all = await fetchTxs("all");
@@ -448,7 +318,6 @@ useEffect(() => {
       setPoints(Number(data.points));
       setPositions(Object.fromEntries(data.positions.map((p) => [p.valueId, p.qty])));
 
-      // Adaptar txs del backend a tu tipo local
       const mapped = data.txs.map((t) => ({
         id: t.id,
         ts: new Date(t.ts).getTime(),
@@ -458,13 +327,8 @@ useEffect(() => {
         deltaPoints: Number(t.deltaPts),
       }));
 
-      // ✅ no sobreescribir cuando estás viendo "Todas"
-      if (txScope === "me") {
-        setTxs(mapped);
-      }
-    } catch {
-      // No autenticado o error; no hacer nada
-    }
+      if (txScope === "me") setTxs(mapped);
+    } catch {}
   }
 
   async function fetchTxs(scope: "me" | "all") {
@@ -484,40 +348,31 @@ useEffect(() => {
     }));
   }
 
-  // NEW: intenta cargar portafolio al montar (por si ya hay cookie válida)
-  useEffect(() => {
-    refreshPortfolio();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ==== Trading usando API ==== (reemplaza lógica local si hay sesión)
+  // ==== Trading usando API (o demo sin sesión) ====
   async function placeOrder(mode: "BUY" | "SELL", valueId: string, qty: number) {
     const price = values[valueId]?.price;
     if (!price || qty <= 0) return;
 
     if (!user) {
-      // sin sesión: lógica local (demo)
       const cost = +(price * qty).toFixed(2);
       if (mode === "BUY" && student.points >= cost) {
         setStudent((s) => ({ ...s, points: +(s.points - cost).toFixed(2) }));
         setTxs((t) => [...t, { id: Math.random().toString(), ts: Date.now(), type: "BUY", valueId, qty, deltaPoints: -cost }]);
       }
       if (mode === "SELL") {
-        setStudent((s) => ({ ...s, points: +(s.points + cost).toFixed(2) }));
-        setTxs((t) => [...t, { id: Math.random().toString(), ts: Date.now(), type: "SELL", valueId, qty, deltaPoints: cost }]);
+        const gain = +(price * qty).toFixed(2);
+        setStudent((s) => ({ ...s, points: +(s.points + gain).toFixed(2) }));
+        setTxs((t) => [...t, { id: Math.random().toString(), ts: Date.now(), type: "SELL", valueId, qty, deltaPoints: gain }]);
       }
-
       return;
     }
 
-    // con sesión: llamar backend
     try {
       await api("/api/trade", {
         method: "POST",
         body: JSON.stringify({ mode, valueId, qty, price }),
       });
       await refreshPortfolio();
-
     } catch (e: any) {
       alert(e.message || "Error en trade");
     }
@@ -545,6 +400,14 @@ useEffect(() => {
 
   if (!mounted) return null;
 
+  // Helpers visuales para mostrar efecto teórico por categoría (no altera precios)
+  function categoryDailyAdjPct(catId: string): number | null {
+    if (!factors?.views24hPct || !factors?.coeff) return null;
+    const k = factors.coeff[catId];
+    if (typeof k !== "number") return null;
+    return +(factors.views24hPct * k).toFixed(2); // p.ej., 14% * 0.10 = 1.40%/día
+  }
+
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6">
       <header className="mb-6 flex items-center justify-between gap-4">
@@ -552,16 +415,21 @@ useEffect(() => {
           <h1 className="text-2xl font-bold">📈 Classroom Trading</h1>
           <p className="text-neutral-400">
             {user ? (
-              <>
-                Bienvenido, <span className="font-semibold">{user.name}</span>. Tienes {fmt.format(points)} pts.
-              </>
+              <>Bienvenido, <span className="font-semibold">{user.name}</span>. Tienes {fmt.format(points)} pts.</>
             ) : (
               <>Bienvenido, {student.name}. Tienes {fmt.format(student.points)} pts. (Modo demo)</>
             )}
           </p>
+          {/* Nota de factores (informativa) */}
+          {factors?.note && (
+            <div className="text-xs text-neutral-500 mt-1">
+              {factors.note} {factors.updatedAt ? <>· <span className="opacity-70">Actualizado: {new Date(factors.updatedAt).toLocaleString()}</span></> : null}
+            </div>
+          )}
         </div>
+
         <div className="flex items-center gap-2">
-          {/* Selector de temporalidad */}
+          {/* Selector de temporalidad (reagrupa velas ya existentes; no acelera ticks) */}
           <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl p-1">
             {TIMEFRAMES.map((opt) => (
               <button
@@ -571,12 +439,41 @@ useEffect(() => {
                   "px-2.5 py-1 text-sm rounded-lg transition " +
                   (tf.id === opt.id ? "bg-blue-600" : "hover:bg-neutral-800")
                 }
-                title={`Nueva vela cada ${opt.label}`}
+                title={`Reagrupar en ${opt.label}`}
               >
                 {opt.label}
               </button>
             ))}
           </div>
+
+          {/* Panel de factores para ADMIN */}
+          {user?.role === "ADMIN" && (
+            <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl p-2">
+              <div className="text-xs text-neutral-400">
+                Δ vistas 24h:{" "}
+                <span className="text-white font-medium">
+                  {typeof factors?.views24hPct === "number" ? `${factors.views24hPct}%` : "—"}
+                </span>
+              </div>
+              {/* Links útiles: abre el archivo/endpoint en una pestaña */}
+              <a
+                href="/api/factors"
+                target="_blank"
+                className="text-xs bg-neutral-800 hover:bg-neutral-700 rounded px-2 py-1"
+                title="Ver /api/factors (si existe)"
+              >
+                /api/factors
+              </a>
+              <a
+                href="/factors.txt"
+                target="_blank"
+                className="text-xs bg-neutral-800 hover:bg-neutral-700 rounded px-2 py-1"
+                title="Ver /factors.txt en /public (si existe)"
+              >
+                /factors.txt
+              </a>
+            </div>
+          )}
 
           {/* Botón de sesión */}
           {user ? (
@@ -593,40 +490,72 @@ useEffect(() => {
 
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
         <section className="lg:col-span-2 space-y-6">
-          {categories.map((cat) => (
-            <div key={cat.id} className="bg-neutral-900 rounded-2xl p-4 border border-neutral-800">
-              <h2 className="text-lg font-semibold mb-2">{cat.name}</h2>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {Object.values(values)
-                  .filter((v) => v.categoryId === cat.id)
-                  .map((v) => (
-                    <div key={v.id} className="rounded-2xl bg-neutral-950 border border-neutral-800 p-3">
-                      <div
-                        onClick={() => setChartFor(v.id)}
-                        className="flex items-center justify-between cursor-pointer hover:bg-neutral-900/50 rounded-xl p-2 transition"
-                        title="Ver gráfico"
-                      >
-                        <div>
-                          <div className="font-medium">{v.name}</div>
-                          <div className="text-xs text-neutral-400">{v.description}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold">{fmt.format(v.price)}</div>
-                          <div className={"text-xs " + (v.changePct >= 0 ? "text-emerald-400" : "text-red-400")}>
-                            {v.changePct >= 0 ? "+" : ""}
-                            {v.changePct}%
+          {categories.map((cat) => {
+            const catAdj = categoryDailyAdjPct(cat.id); // ajuste teórico por día para esta categoría
+            return (
+              <div key={cat.id} className="bg-neutral-900 rounded-2xl p-4 border border-neutral-800">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-lg font-semibold">{cat.name}</h2>
+                  {user?.role === "ADMIN" && catAdj !== null && (
+  <div className={"text-xs px-2 py-0.5 rounded-lg " + (catAdj >= 0 ? "bg-emerald-900/30 text-emerald-300" : "bg-red-900/30 text-red-300")}>
+    Factor canal (teórico): {catAdj >= 0 ? "+" : ""}{catAdj}% / día
+  </div>
+)}
+
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {Object.values(values)
+                    .filter((v) => v.categoryId === cat.id)
+                    .map((v) => (
+                      <div key={v.id} className="rounded-2xl bg-neutral-950 border border-neutral-800 p-3">
+                        <div
+                          onClick={() => {
+                            setChartFor(v.id);
+                            // ✅ si no hay base para este id, siembra una vela con el precio actual
+                            setCandlesBase((prev) => {
+                              if (prev?.[v.id]?.length) return prev;
+                              const p = values[v.id].price;
+                              const now = Date.now();
+                              return {
+                                ...prev,
+                                [v.id]: [{ time: now, open: p, high: p, low: p, close: p }],
+                              };
+                            });
+                          }}
+                          className="flex items-center justify-between cursor-pointer hover:bg-neutral-900/50 rounded-xl p-2 transition"
+                          title="Ver gráfico"
+                        >
+                          <div>
+                            <div className="font-medium">{v.name}</div>
+                            <div className="text-xs text-neutral-400">{v.description}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-bold">{fmt.format(v.price)}</div>
+                            <div className={"text-xs " + (v.changePct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                              {v.changePct >= 0 ? "+" : ""}
+                              {v.changePct}%
+                            </div>
                           </div>
                         </div>
+
+                        {/* Badge pequeñito por tarjeta (informativo) */}
+                       {user?.role === "ADMIN" && catAdj !== null && (
+  <div className="mt-2 text-[10px] text-neutral-500">
+    Ajuste diario teórico por categoría: {catAdj >= 0 ? "+" : ""}{catAdj}% (según factores)
+  </div>
+)}
+
+                        <div className="flex gap-2 mt-3">
+                          <button onClick={() => setTrade({ mode: "BUY", valueId: v.id })} className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-1 rounded-xl">Comprar</button>
+                          <button onClick={() => setTrade({ mode: "SELL", valueId: v.id })} className="flex-1 bg-red-600 hover:bg-red-500 py-1 rounded-xl">Vender</button>
+                        </div>
                       </div>
-                      <div className="flex gap-2 mt-3">
-                        <button onClick={() => setTrade({ mode: "BUY", valueId: v.id })} className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-1 rounded-xl">Comprar</button>
-                        <button onClick={() => setTrade({ mode: "SELL", valueId: v.id })} className="flex-1 bg-red-600 hover:bg-red-500 py-1 rounded-xl">Vender</button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </section>
 
         <aside className="space-y-4">
@@ -644,10 +573,7 @@ useEffect(() => {
                     onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
                     className="w-24 bg-neutral-800 rounded-lg px-2 py-1"
                   />
-                  <button
-                    onClick={() => placeOrder(trade.mode, trade.valueId, qty)}
-                    className="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded-lg"
-                  >
+                  <button onClick={() => placeOrder(trade.mode, trade.valueId, qty)} className="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded-lg">
                     Confirmar
                   </button>
                   <button onClick={() => setTrade(null)} className="bg-neutral-700 hover:bg-neutral-600 px-3 py-1 rounded-lg">
@@ -689,14 +615,13 @@ useEffect(() => {
           <div className="bg-neutral-900 rounded-2xl p-4 border border-neutral-800">
             <h3 className="font-semibold mb-2">Transacciones</h3>
 
-            {/* Toggle solo para ADMIN */}
             {user?.role === "ADMIN" && (
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-xs text-neutral-400">Ver:</span>
                 <button
                   onClick={async () => {
                     setTxScope("me");
-                    await refreshPortfolio(); // recarga solo mis transacciones
+                    await refreshPortfolio();
                   }}
                   className={"px-2 py-1 rounded " + (txScope === "me" ? "bg-blue-600" : "bg-neutral-800 hover:bg-neutral-700")}
                 >
@@ -706,7 +631,7 @@ useEffect(() => {
                   onClick={async () => {
                     setTxScope("all");
                     const all = await fetchTxs("all");
-                    setTxs(all); // carga todas las transacciones
+                    setTxs(all);
                   }}
                   className={"px-2 py-1 rounded " + (txScope === "all" ? "bg-blue-600" : "bg-neutral-800 hover:bg-neutral-700")}
                 >
@@ -716,18 +641,13 @@ useEffect(() => {
             )}
 
             <div className="space-y-2 max-h-72 overflow-auto pr-1">
-              {txs.length === 0 && (
-                <div className="text-sm text-neutral-500">Aún no hay movimientos.</div>
-              )}
+              {txs.length === 0 && <div className="text-sm text-neutral-500">Aún no hay movimientos.</div>}
 
               {txs
                 .slice()
                 .reverse()
                 .map((t) => (
-                  <div
-                    key={t.id}
-                    className="text-sm flex items-center justify-between border-b border-neutral-800 py-1"
-                  >
+                  <div key={t.id} className="text-sm flex items-center justify-between border-b border-neutral-800 py-1">
                     <span
                       className={
                         t.type === "BUY"
@@ -747,12 +667,7 @@ useEffect(() => {
                     <span>{t.qty ?? 0}x</span>
                     <span>{t.valueId ?? "-"}</span>
 
-                    {/* Mostrar autor solo en modo Todas */}
-                    {txScope === "all" && (
-                      <span className="text-neutral-400">
-                        {t.userName ?? t.userId ?? "—"}
-                      </span>
-                    )}
+                    {txScope === "all" && <span className="text-neutral-400">{t.userName ?? t.userId ?? "—"}</span>}
 
                     <span className={t.deltaPoints >= 0 ? "text-emerald-400" : "text-red-400"}>
                       {t.deltaPoints >= 0 ? "+" : ""}
@@ -775,9 +690,23 @@ useEffect(() => {
                 <div className="text-lg font-semibold">{selected.name}</div>
                 <div className="text-xs text-neutral-500">{selected.description}</div>
               </div>
-              <button onClick={() => setChartFor(null)} className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700">Cerrar</button>
+              <button onClick={() => setChartFor(null)} className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700">
+                Cerrar
+              </button>
             </div>
-            <CandleChart key={chartFor} candles={history[chartFor]!} height={300} xTicks={6} yTicks={4} bodyWidthRatio={0.4} />
+
+            {(derivedCandles?.length ?? 0) > 0 ? (
+              <CandleChart
+                key={chartFor + tf.id}
+                candles={derivedCandles}
+                height={300}
+                xTicks={6}
+                yTicks={4}
+                bodyWidthRatio={0.4}
+              />
+            ) : (
+              <div className="text-sm text-neutral-400">Aún no hay velas para esta temporalidad. Espera unos segundos…</div>
+            )}
           </div>
         </div>
       )}
@@ -806,12 +735,16 @@ useEffect(() => {
             />
 
             <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setLoginOpen(false)} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700">Cancelar</button>
-              <button onClick={handleLogin} className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500">Entrar</button>
+              <button onClick={() => setLoginOpen(false)} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700">
+                Cancelar
+              </button>
+              <button onClick={handleLogin} className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500">
+                Entrar
+              </button>
             </div>
 
             <p className="text-xs text-neutral-500 mt-3">
-              Necesitas tener listas las rutas: /api/login, /api/logout, /api/portfolio, /api/trade y /api/transfer.
+              Necesitas tener listas las rutas: /api/login, /api/logout, /api/portfolio, /api/trade, /api/transfer y /api/txs.
             </p>
           </div>
         </div>

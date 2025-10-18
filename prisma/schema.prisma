@@ -1,52 +1,66 @@
-// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-
 model User {
-  id        String   @id            // tu ID asignado (ej. ana01)
+  id        String   @id            
   name      String
   codeHash  String                  // hash del código/clave
-  points    Decimal  @default(1000)
+  points    Int      @default(5)
+  username  String?                 // ej. "angel"
+  day       String?                 // ej. "sab" | "dom"
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
   positions Position[]
   txs       Tx[]
   outTxfs   Transfer[] @relation("outgoing")
   inTxfs    Transfer[] @relation("incoming")
+
+  @@index([day])
 }
 
 model Position {
-  id      String  @id @default(cuid())
-  userId  String
-  valueId String
-  qty     Int
-  user    User    @relation(fields: [userId], references: [id])
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  valueId   String
+  qty       Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
   @@unique([userId, valueId])
 }
 
 model Tx {
   id       String   @id @default(cuid())
   userId   String
+  user     User     @relation(fields: [userId], references: [id])
   ts       DateTime @default(now())
   type     String   // BUY | SELL | TRANSFER_IN | TRANSFER_OUT
   valueId  String?
   qty      Int?
-  deltaPts Decimal   // +/- puntos
-  user     User     @relation(fields: [userId], references: [id])
+  deltaPts Decimal   // +/- puntos (deja Decimal para centavos)
+
+  @@index([ts])
+  @@index([userId, ts])
 }
 
 model Transfer {
   id        String   @id @default(cuid())
-  fromId    String
-  toId      String
-  amount    Decimal
+  fromId    String?
+  fromUser  User?    @relation("outgoing", fields: [fromId], references: [id])
+  toId      String?
+  toUser    User?    @relation("incoming", fields: [toId], references: [id])
+  amount    Int
   ts        DateTime @default(now())
-  fromUser  User     @relation("outgoing", fields: [fromId], references: [id])
-  toUser    User     @relation("incoming", fields: [toId], references: [id])
+
+  @@index([ts])
+  @@index([fromId, ts])
+  @@index([toId, ts])
 }

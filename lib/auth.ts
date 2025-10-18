@@ -1,37 +1,60 @@
 // lib/auth.ts
-import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
 
 const SECRET = process.env.JWT_SECRET || "dev_secret";
+const COOKIE_NAME = "ct_session";
 
-/** Lee y valida la cookie ct_session */
-export async function readSessionFromHeaders() {
+export type SessionPayload = {
+  uid: string;
+  name?: string;
+  role: "ADMIN" | "USER";
+};
+
+/** Deriva el rol desde ADMIN_IDS en .env (coma-separado) */
+function isAdminId(id: string) {
+  const adminIds = (process.env.ADMIN_IDS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return adminIds.includes(id);
+}
+
+function deriveRole(uid: string): "ADMIN" | "USER" {
+  return isAdminId(uid) ? "ADMIN" : "USER";
+}
+
+/** Firma un JWT con rol derivado y lo retorna */
+export function signSessionToken(payload: { uid: string; name?: string }) {
+  const role = deriveRole(payload.uid);
+  const full: SessionPayload = { ...payload, role };
+  return jwt.sign(full, SECRET, { expiresIn: "30d" });
+}
+
+/** Lee y valida la cookie ct_session; re-deriva role por si ADMIN_IDS cambió */
+export async function readSessionFromHeaders(): Promise<SessionPayload> {
   const cookieStore = await cookies(); // en Vercel es Promise<RequestCookies>
-  const token = cookieStore.get("ct_session")?.value;
+  const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) throw new Error("unauthorized");
   try {
-    return jwt.verify(token, SECRET) as { uid: string; role: "ADMIN" | "USER" };
+    const decoded = jwt.verify(token, SECRET) as SessionPayload;
+    // Recalcula el rol (idempotente si no cambió ADMIN_IDS)
+    const role = deriveRole(decoded.uid);
+    return { ...decoded, role };
   } catch {
     throw new Error("unauthorized");
   }
 }
 
-/** Exige ADMIN (útil para endpoints protegidos) */
-export async function requireAdmin() {
-  const sess = await readSessionFromHeaders();
-  if (sess.role !== "ADMIN") throw new Error("forbidden");
-  return sess;
-}
-
-/** Firma sesión y **setea cookie** ct_session en la respuesta dada */
-export function signSession(
+/** Establece la cookie de sesión firmada (default 30 días) */
+export function setSessionCookie(
   res: NextResponse,
-  payload: { uid: string; role: "ADMIN" | "USER" },
+  payload: { uid: string; name?: string },
   maxAgeDays = 30
 ) {
-  const token = jwt.sign(payload, SECRET, { expiresIn: `${maxAgeDays}d` });
-  res.cookies.set("ct_session", token, {
+  const token = signSessionToken(payload);
+  res.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -43,6 +66,16 @@ export function signSession(
 
 /** Borra la cookie de sesión */
 export function clearSession(res: NextResponse) {
-  res.cookies.delete("ct_session");
+  res.cookies.delete(COOKIE_NAME);
   return res;
+}
+
+/** Helper para rutas protegidas de admin */
+export async function requireAdmin(): Promise<SessionPayload | null> {
+  try {
+    const s = await readSessionFromHeaders();
+    return s.role === "ADMIN" ? s : null;
+  } catch {
+    return null;
+  }
 }

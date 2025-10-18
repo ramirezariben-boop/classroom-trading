@@ -1,0 +1,18 @@
+{
+  "date": "2025-10-18",
+  "volatility": 0.05,
+  "tickSeconds": 5,
+  "candleSeconds": 10,
+  "basePrices": {
+    "baumxp": 100,
+    "dsgmxp": 100,
+    "rftmxp": 100,
+    "krimxp": 40,
+    "grmmxp": 40,
+    "litmxp": 50,
+    "hormxp": 55,
+    "sonmxp": 1,
+    "sammxp": 1,
+    "zhnmxp": 12
+  }
+}

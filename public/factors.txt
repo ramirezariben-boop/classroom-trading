@@ -1,0 +1,14 @@
+{
+  "views24hPct": 14,
+  "coeff": {
+    "wahrungen": 0.10,
+    "zehntel": -0.042857,
+    "materialien": -0.021429,
+    "aktien": 0,
+    "werte": 0,
+    "guter": 0,
+    "vocabulario": 0
+  },
+  "note": "Ejemplo: +14% vistas/24h -> +1.4%/día en Währungen, -0.6% en Zehntel, -0.3% en Materiales.",
+  "updatedAt": "2025-10-17T00:00:00Z"
+}
