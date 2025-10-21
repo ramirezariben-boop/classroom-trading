@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
-import { prisma } from "@/lib/prisma";
+// ⬇️ AJUSTA ESTA RUTA a donde esté tu prisma:
+import { prisma } from "@/app/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -169,10 +170,18 @@ function pushBaseCandle(id: string, price: number, now: number, candleMs: number
   last.close = price;
   state.candlesBase.set(id, arr.slice(-1000));
 
-  // (Opcional) refleja actualización intra-vela en DB
-  void prisma.candle.update({
+  // ⬇️ CAMBIO CLAVE: update → upsert (si no existe, la crea)
+  void prisma.candle.upsert({
     where: { valueId_time: { valueId: id, time: BigInt(last.time) } },
-    data: { high: last.high, low: last.low, close: last.close },
+    update: { high: last.high, low: last.low, close: last.close },
+    create: {
+      valueId: id,
+      time: BigInt(last.time),
+      open: last.open,
+      high: last.high,
+      low: last.low,
+      close: last.close,
+    },
   }).catch(() => {});
 }
 
@@ -199,20 +208,22 @@ export async function GET() {
   if (state.candlesBase.size === 0) {
     for (const id of Object.keys(DEFAULTS)) {
       try {
+        // ⬇️ TRAE DESC y luego invierte para ascendente
         const rows = await prisma.candle.findMany({
           where: { valueId: id },
-          orderBy: { time: "asc" },
+          orderBy: { time: "desc" },
           take: PRELOAD,
         });
         if (rows.length) {
+          const asc = rows.slice().reverse();
           state.candlesBase.set(
             id,
-            rows.map(r => ({
+            asc.map(r => ({
               time: Number(r.time),
               open: r.open, high: r.high, low: r.low, close: r.close,
             }))
           );
-          const last = rows[rows.length - 1];
+          const last = asc[asc.length - 1];
           state.lastPrices.set(id, last.close);
         }
       } catch {}
@@ -281,5 +292,8 @@ export async function GET() {
   const candlesBaseObj: Record<string, Candle[]> = {};
   for (const [id, arr] of state.candlesBase.entries()) candlesBaseObj[id] = arr;
 
-  return NextResponse.json({ prices: PRICES, candlesBase: candlesBaseObj, ts: now }, { status: 200 });
+  return NextResponse.json(
+    { prices: PRICES, candlesBase: candlesBaseObj, ts: now },
+    { status: 200, headers: { "Cache-Control": "no-store" } }
+  );
 }

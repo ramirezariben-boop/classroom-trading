@@ -3,7 +3,15 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const DATA_DIR     = path.resolve(process.cwd(), "data");
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+// ⚠️ Vercel es read-only salvo /tmp: en prod escribe en /tmp, en local usa ./data
+const DATA_DIR =
+  process.env.NODE_ENV === "production"
+    ? path.join("/tmp", "data")
+    : path.resolve(process.cwd(), "data");
+
 const HISTORY_PATH = path.join(DATA_DIR, "history.json");
 const STATE_PATH   = path.join(DATA_DIR, "state_runtime.json");
 

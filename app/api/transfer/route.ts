@@ -1,14 +1,19 @@
 // app/api/transfer/route.ts
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
-  const { toUserId, amount } = await req.json();
-  if (!toUserId || !amount) {
-    return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
+  const body = await req.json().catch(() => ({} as any));
+  const toUserId = body.toUserId as string | undefined;
+  const amount = Number(body.amount);
+
+  if (!toUserId || !Number.isFinite(amount) || amount <= 0) {
+    return NextResponse.json({ error: "Faltan datos válidos" }, { status: 400 });
   }
 
-  // Aquí podrías guardar en DB o actualizar saldo
   console.log(`Transferencia simulada de ${amount} MXP a ${toUserId}`);
 
-  return NextResponse.json({ ok: true, toUserId, amount });
+  return NextResponse.json({ ok: true, toUserId, amount }, { headers: { "Cache-Control": "no-store" } });
 }

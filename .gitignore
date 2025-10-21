@@ -13,3 +13,5 @@ out/
 # Bases de datos / datos locales
 prisma/dev.db
 data/users.json
+
+.vercel

@@ -1,12 +1,17 @@
 // app/api/admin/users/route.ts
 import { NextResponse } from "next/server";
-// Ajusta el import según dónde esté tu prisma:
-import { prisma } from "@/lib/prisma";
-// Si tu prisma está en "@/lib/prisma", usa ese path
-import { requireAdmin } from "@/lib/auth";
 import bcrypt from "bcrypt";
+import { requireAdmin } from "@/lib/auth";
 
-/** Deriva rol solo para mostrarlo en UI; no se guarda en DB */
+// ⬇️ Ajusta este import a donde REALMENTE esté tu prisma.
+// Si tu archivo está en "app/lib/prisma.ts", usa esta línea:
+import { prisma } from "@/app/lib/prisma";
+// Si lo tienes en "lib/prisma.ts", cámbialo a: import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+/** Deriva rol solo para UI; no se guarda en DB */
 function roleOf(id: string): "ADMIN" | "USER" {
   const list = (process.env.ADMIN_IDS || "")
     .split(",")
@@ -37,7 +42,10 @@ export async function POST(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const { id, name, code, points = 1000 } = await req.json();
+  const body = await req.json().catch(() => ({} as any));
+  const { id, name, code } = body as { id?: string; name?: string; code?: string };
+  const points = typeof body.points === "number" ? body.points : 5; // default 5
+
   if (!id || !name || !code) {
     return NextResponse.json({ error: "Campos requeridos: id, name, code" }, { status: 400 });
   }
@@ -56,17 +64,18 @@ export async function POST(req: Request) {
   }
 }
 
-/** PUT: reset/editar usuario (solo admin) */
+/** PUT: editar usuario (solo admin) */
 export async function PUT(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const { id, newCode, newPoints } = await req.json();
+  const body = await req.json().catch(() => ({} as any));
+  const { id, newCode, newPoints } = body as { id?: string; newCode?: string; newPoints?: number };
   if (!id) return NextResponse.json({ error: "Falta id" }, { status: 400 });
 
   const data: any = {};
   if (typeof newPoints === "number") data.points = newPoints;
-  if (newCode) data.codeHash = await bcrypt.hash(newCode, 10);
+  if (typeof newCode === "string" && newCode.length > 0) data.codeHash = await bcrypt.hash(newCode, 10);
 
   try {
     const u = await prisma.user.update({ where: { id }, data });

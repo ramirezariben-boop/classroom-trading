@@ -1,7 +1,11 @@
 // app/api/login/route.ts
 import { NextResponse } from "next/server";
 import bcrypt from "bcrypt";
-import { prisma } from "@/lib/prisma";
+// ⬇️ AJUSTA a donde esté tu prisma:
+import { prisma } from "@/app/lib/prisma"; // o: "@/lib/prisma"
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // Deriva el rol desde ADMIN_IDS (sin tocar la DB)
 function roleOf(id: string): "ADMIN" | "USER" {
@@ -20,22 +24,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
     }
 
-    // Buscar usuario en la base de datos
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
     }
 
-    // Comparar la clave ingresada con el hash guardado
     const ok = await bcrypt.compare(code, user.codeHash);
     if (!ok) {
       return NextResponse.json({ error: "Clave incorrecta" }, { status: 401 });
     }
 
-    // Derivar rol (por .env)
     const role = roleOf(user.id);
 
     const res = NextResponse.json({
@@ -43,16 +41,18 @@ export async function POST(req: Request) {
       user: { id: user.id, name: user.name, role },
     });
 
-    // Guardar cookie
-    res.cookies.set(
-      "ct_session",
-      JSON.stringify({ id: user.id, role }),
-      { httpOnly: true, path: "/" }
-    );
+    // Cookie de sesión
+    res.cookies.set("ct_session", JSON.stringify({ id: user.id, role }), {
+      httpOnly: true,
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7, // 7 días
+    });
 
     return res;
   } catch (e: any) {
     console.error(e);
-    return NextResponse.json({ error: e.message || "Error en login" }, { status: 500 });
+    return NextResponse.json({ error: e?.message || "Error en login" }, { status: 500 });
   }
 }

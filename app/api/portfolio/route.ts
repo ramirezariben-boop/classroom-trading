@@ -1,6 +1,9 @@
 // app/api/portfolio/route.ts
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 // Datos en memoria para demo
 let demoPortfolio = {
   points: 1500,
@@ -15,5 +18,5 @@ let demoPortfolio = {
 };
 
 export async function GET() {
-  return NextResponse.json(demoPortfolio);
+  return NextResponse.json(demoPortfolio, { headers: { "Cache-Control": "no-store" } });
 }

@@ -1,86 +1,91 @@
 // app/api/trade/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/app/lib/prisma"; // AJUSTA ruta si es necesario
 import { readSessionFromHeaders } from "@/lib/auth";
 
-type Mode = 'BUY' | 'SELL'
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type Mode = "BUY" | "SELL";
 
 export async function POST(req: Request) {
   try {
-    const { uid } = await readSessionFromHeaders();
-    const { mode, valueId, qty, price } = await req.json()
+    const { uid } = await readSessionFromHeaders(); // lanza "unauthorized" si no
+    const body = await req.json().catch(() => ({} as any));
+    const { mode, valueId } = body as { mode?: Mode; valueId?: string };
+    let { qty, price } = body as { qty?: number; price?: number };
 
-    // Validaciones básicas
-    if (!['BUY', 'SELL'].includes(mode)) {
-      return NextResponse.json({ error: 'Modo inválido' }, { status: 400 })
+    if (mode !== "BUY" && mode !== "SELL") {
+      return NextResponse.json({ error: "Modo inválido" }, { status: 400 });
     }
-    if (!valueId || !qty || qty <= 0 || !price || price <= 0) {
-      return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
+    if (!valueId) return NextResponse.json({ error: "Falta valueId" }, { status: 400 });
+
+    qty = Math.floor(Number(qty));
+    price = Number(price);
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0) {
+      return NextResponse.json({ error: "Datos inválidos: qty/price" }, { status: 400 });
     }
 
-    const nQty = Math.floor(Number(qty))
-    const nPrice = Number(price)
-    const deltaPts = Number((nPrice * nQty).toFixed(2)) * (mode === 'BUY' ? -1 : 1)
+    const deltaPts = Number((price * qty).toFixed(2)) * (mode === "BUY" ? -1 : 1);
 
     await prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: uid } })
-      if (!user) throw new Error('404')
+      const user = await tx.user.findUnique({ where: { id: uid } });
+      if (!user) throw new Error("404");
 
-      const currentPts = Number(user.points)
+      const currentPts = Number(user.points);
 
-      if (mode === 'BUY') {
-        // Saldo suficiente
-        if (currentPts + 1e-9 < -deltaPts) throw new Error('saldo')
+      if (mode === "BUY") {
+        if (currentPts + 1e-9 < -deltaPts) throw new Error("saldo");
 
-        // Debita puntos
         await tx.user.update({
           where: { id: uid },
           data: { points: currentPts + deltaPts },
-        })
+        });
 
-        // Suma posición
         await tx.position.upsert({
           where: { userId_valueId: { userId: uid, valueId } },
-          update: { qty: { increment: nQty } },
-          create: { userId: uid, valueId, qty: nQty },
-        })
+          update: { qty: { increment: qty } },
+          create: { userId: uid, valueId, qty },
+        });
       } else {
-        // SELL
         const pos = await tx.position.findUnique({
           where: { userId_valueId: { userId: uid, valueId } },
-        })
-        if (!pos || pos.qty < nQty) throw new Error('pos')
+        });
+        if (!pos || pos.qty < qty) throw new Error("pos");
 
-        // Acredita puntos
         await tx.user.update({
           where: { id: uid },
           data: { points: currentPts + deltaPts },
-        })
+        });
 
-        // Resta posición (si llega a 0 la eliminamos opcionalmente)
-        const newQty = pos.qty - nQty
+        const newQty = pos.qty - qty;
         if (newQty > 0) {
-          await tx.position.update({ where: { id: pos.id }, data: { qty: newQty } })
+          await tx.position.update({ where: { id: pos.id }, data: { qty: newQty } });
         } else {
-          await tx.position.delete({ where: { id: pos.id } })
+          await tx.position.delete({ where: { id: pos.id } });
         }
       }
 
-      // Registra transacción
       await tx.tx.create({
-        data: {
-          userId: uid,
-          type: mode as Mode,
-          valueId,
-          qty: nQty,
-          deltaPts,
-        },
-      })
-    })
+        data: { userId: uid, type: mode, valueId, qty, deltaPts },
+      });
+    });
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    const msg = e?.message === "unauthorized" ? 401 : 500;
-    return new Response(e?.message || "error", { status: msg });
+    if (e?.message === "unauthorized") {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+    if (e?.message === "saldo") {
+      return NextResponse.json({ error: "Saldo insuficiente" }, { status: 400 });
+    }
+    if (e?.message === "pos") {
+      return NextResponse.json({ error: "Posición insuficiente" }, { status: 400 });
+    }
+    if (e?.message === "404") {
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    }
+    console.error(e);
+    return NextResponse.json({ error: "Error" }, { status: 500 });
   }
 }

@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import path from "node:path";
 import fs from "node:fs/promises";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 type Factors = {
   views24hPct?: number;
   coeff?: Record<string, number>;
@@ -11,23 +14,31 @@ type Factors = {
 };
 
 export async function GET() {
-  const filePath = path.join(process.cwd(), "public", "factors.txt");
+  // 1) prefer public/factors.txt
+  const txtPath = path.join(process.cwd(), "public", "factors.txt");
+  // 2) fallback a data/factors.json
+  const jsonPath = path.join(process.cwd(), "data", "factors.json");
+
+  const headers = { "Cache-Control": "no-store" };
+
+  async function readAndParseJSON(p: string) {
+    const raw = await fs.readFile(p, "utf8");
+    try {
+      return JSON.parse(raw);
+    } catch {
+      throw new Error("JSON inválido");
+    }
+  }
 
   try {
-    const raw = await fs.readFile(filePath, "utf8");
-
-    // Intenta parsear como JSON
     let data: any;
     try {
-      data = JSON.parse(raw);
-    } catch {
-      return NextResponse.json(
-        { error: "El archivo factors.txt no contiene JSON válido." },
-        { status: 400, headers: { "Cache-Control": "no-store" } }
-      );
+      data = await readAndParseJSON(txtPath);
+    } catch (eTxt: any) {
+      // fallback a JSON en /data
+      data = await readAndParseJSON(jsonPath);
     }
 
-    // Sanitiza/valida lo básico
     const out: Factors = {
       views24hPct: typeof data.views24hPct === "number" ? data.views24hPct : undefined,
       coeff: typeof data.coeff === "object" && data.coeff ? data.coeff : undefined,
@@ -35,17 +46,13 @@ export async function GET() {
       updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : undefined,
     };
 
-    return NextResponse.json(out, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(out, { headers });
   } catch (err: any) {
-    if (err?.code === "ENOENT") {
-      return NextResponse.json(
-        { error: "No se encontró /public/factors.txt." },
-        { status: 404, headers: { "Cache-Control": "no-store" } }
-      );
-    }
-    return NextResponse.json(
-      { error: "Error leyendo factors.txt." },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    );
+    const code = err?.code === "ENOENT" ? 404 : 500;
+    const msg =
+      err?.code === "ENOENT"
+        ? "No se encontró factors.txt ni factors.json."
+        : (err?.message || "Error leyendo factors.");
+    return NextResponse.json({ error: msg }, { status: code, headers });
   }
 }

@@ -1,11 +1,14 @@
 // app/api/run-daily/route.ts
 import { NextResponse } from "next/server";
-import { runDailyUpdate } from "@/lib/engine/pricing"; // si no tienes alias "@", usa ruta relativa: "../../lib/engine/pricing"
+import { runDailyUpdate } from "@/lib/engine/pricing"; // o ruta relativa
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST() {
   try {
     const state = runDailyUpdate();
-    return NextResponse.json({ ok: true, state });
+    return NextResponse.json({ ok: true, state }, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
     console.error("run-daily failed:", err);
     return NextResponse.json(
@@ -15,7 +18,4 @@ export async function POST() {
   }
 }
 
-export async function GET() {
-  // Permite probar desde el navegador
-  return POST();
-}
+export async function GET() { return POST(); }
