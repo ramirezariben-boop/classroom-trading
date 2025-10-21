@@ -16,6 +16,7 @@
   "dependencies": {
     "@prisma/client": "^6.17.1",
     "bcrypt": "^6.0.0",
+    "csv-parse": "^6.1.0",
     "geist": "^1.5.1",
     "jsonwebtoken": "^9.0.2",
     "next": "^15.5.4",

@@ -1,0 +1,45 @@
+{
+  "date": "2025-10-19",
+
+  "youtube": {
+    "likes": 129,
+    "vistas": 4334
+  },
+
+  "empresas": {
+    "RFTMXP": { "F": 0.60 },
+    "BAUMXP": { "F": 0.65 },
+    "DSGMXP": { "F": 0.70 }
+  },
+
+  "grupos": {
+    "sabado": {
+      "waehrung_ticker": "SAMMXP",
+      "examen": { "dias_restantes": 27 },
+      "participacion": { "alumnos_presentes": 30, "puntos_totales": 9.5 },
+      "evaluaciones": { "promedio_hoy": null },
+      "tareas_extra": { "total_hoy": null },
+      "asistencia": 81.39
+    },
+    "domingo": {
+      "waehrung_ticker": "SONMXP",
+      "examen": { "dias_restantes": 28 },
+      "participacion": { "alumnos_presentes": null, "puntos_totales": null },
+      "evaluaciones": { "promedio_hoy": null },
+      "tareas_extra": { "total_hoy": null },
+      "asistencia": 81.24
+    }
+  },
+
+  "demanda": {
+    "decimas": null,
+    "materiales": null,
+    "gramm": null,
+    "literatur": null,
+    "krimi": null,
+    "hoer": null,
+    "komm": null
+  },
+
+  "interaccion_social": 0
+}

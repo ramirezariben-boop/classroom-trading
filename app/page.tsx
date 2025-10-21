@@ -90,6 +90,25 @@ const TIMEFRAMES: Timeframe[] = [
 export default function Page() {
   const [mounted, setMounted] = useState(false);
 
+// === Historial (para variación diaria) ===
+const [prevMap, setPrevMap] = useState<Record<string, number>>({});
+
+useEffect(() => {
+  (async () => {
+    try {
+      const res = await fetch("/api/history?limit=2", { cache: "no-store" });
+      const json = await res.json();
+      if (json.ok && json.history?.length >= 2) {
+        const prev = json.history[json.history.length - 2].last_close;
+        setPrevMap(prev);
+      }
+    } catch (e) {
+      console.warn("No se pudo cargar historial diario", e);
+    }
+  })();
+}, []);
+
+
   // Estado “demo” (seguirá visible si NO hay sesión)
   const [student, setStudent] = useState<{ name: string; points: number }>({ name: "Alumno Demo", points: 1000 });
 
@@ -538,6 +557,14 @@ useEffect(() => {
                             </div>
                           </div>
                         </div>
+
+{prevMap[v.name] && (
+  <div className={"text-[11px] " + (v.price >= prevMap[v.name] ? "text-emerald-400" : "text-red-400")}>
+    {v.price >= prevMap[v.name] ? "↑" : "↓"}{" "}
+    {(((v.price / prevMap[v.name]) - 1) * 100).toFixed(2)}% vs ayer
+  </div>
+)}
+
 
                         {/* Badge pequeñito por tarjeta (informativo) */}
                        {user?.role === "ADMIN" && catAdj !== null && (

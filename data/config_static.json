@@ -1,0 +1,140 @@
+{
+  "globals": {
+    "ema_alpha": 0.4,
+    "daily_clamps": {
+      "waehrungen": 0.25,
+      "zehntel": 0.20,
+      "materiales": 0.15,
+      "aktien": 0.30,
+      "decima_real": 0.10
+    },
+    "exam": { "d0": 10, "k": 0.45, "clamp_days": 30 }
+  },
+  "medias": {
+    "sabado": {
+      "P": 2.66,
+      "Q": 8.0,
+      "E": 8.509,
+      "X": 3.09,
+      "D_dec": 0.75,
+      "D_mat": 0.125,
+      "A": 80.59
+    },
+    "domingo": {
+      "P": 5.15,
+      "Q": 8.0,
+      "E": 8.527,
+      "X": 1.12,
+      "D_dec": 0.41,
+      "D_mat": 0.125,
+      "A": 81.38
+    },
+    "media_global": {
+      "R": 0.0298,
+      "VY": 4334
+    }
+  },
+  "waehrungen": {
+    "SAMMXP": {
+      "base_price": 1.0,
+      "m": 0.5,
+      "clamp": 0.25,
+      "ema_alpha": 0.5,
+      "nudges": { "X": 0.02, "IS": 0.02 }
+    },
+    "SONMXP": {
+      "base_price": 1.0,
+      "m": 0.5,
+      "clamp": 0.25,
+      "ema_alpha": 0.5,
+      "nudges": { "X": 0.02, "IS": 0.02 }
+    }
+  },
+  "zehntel": {
+    "ZHNMXP1": {
+      "base_price": 20,
+      "weights": { "D_dec": 0.20, "E": 0.10, "EX": 0.10, "P_inv": 0.10 },
+      "clamp": 0.20
+    },
+    "ZHNMXP2": {
+      "base_price": 20,
+      "weights": { "D_dec": 0.20, "E": 0.10, "EX": 0.10, "P_inv": 0.10 },
+      "clamp": 0.20
+    }
+  },
+  "decima_real": {
+    "anchor_base": 15,
+    "follow_rule": {
+      "multiplier_on_ZHN": 0.95,
+      "min_base": 15,
+      "daily_clamp": 0.10
+    }
+  },
+  "materiales": {
+    "educativos": {
+      "Grammatik": {
+        "base_price": 40,
+        "weights": { "D_gramm": 0.25, "D_mat": 0.15, "EX": 0.30 },
+        "clamp": 0.15
+      },
+      "Hörverstehen": {
+        "base_price": 55,
+        "weights": { "D_hoer": 0.25, "D_mat": 0.15, "EX": 0.30 },
+        "clamp": 0.15
+      },
+      "Kommunikation": {
+        "base_price": 40,
+        "weights": { "D_komm": 0.25, "D_mat": 0.15, "EX": 0.25 },
+        "clamp": 0.15
+      }
+    },
+    "lectura": {
+      "Literatur": {
+        "base_price": 50,
+        "weights": { "R": 0.25, "VY": 0.20, "D_mat": 0.05 },
+        "clamp": 0.15
+      }
+    },
+    "ocio": {
+      "Krimi": {
+        "base_price": 40,
+        "weights": { "D_krimi": 0.25, "EX": -0.20 },
+        "clamp": 0.15
+      }
+    }
+  },
+  "aktien": {
+    "defaults": {
+      "float": 30,
+      "base_price": 20,
+      "F_sensitivity": 1.0,
+      "clamp": 0.30,
+      "ema_alpha": 0.4,
+      "intraday": { "slippage_k": 0.06, "breaker": 0.40 }
+    },
+    "RFTMXP": { "global_weights": { "pi": -0.05, "C": 0.10, "V": -0.05, "EX": 0.15 } },
+    "DSGMXP": { "global_weights": { "pi": -0.05, "C": 0.10, "V": -0.05, "EX": 0.10 } },
+    "BAUMXP": { "global_weights": { "pi": -0.03, "C": 0.08, "V": 0.02, "EX": 0.02 } }
+  },
+  "werte": {
+    "WXHMXP": {
+      "weights": { "X": 0.30, "IS": 0.10 },
+      "micro_effects": { "discount_materiales_decimas": -0.02, "inflation_push": 0.004 }
+    },
+    "WBTMXP": {
+      "weights": { "X": 0.30, "IS": 0.10 },
+      "micro_effects": { "discount_materiales_decimas": -0.02, "inflation_push": 0.004 }
+    },
+    "WGRMXP": { "todo": true },
+    "WAUMXP": { "todo": true }
+  },
+  "macro_weights": {
+    "pi": { "P": -0.05, "Q": -0.05, "E": 0.02, "X": 0.15, "R": -0.08, "VY": -0.12, "EX": 0.18, "A": -0.03, "IS": 0.05 },
+    "C":  { "P": 0.20, "Q": 0.25, "E": 0.10, "X": 0.05, "R": 0.15, "VY": 0.10, "EX": -0.05, "A": 0.12, "IS": 0.05 },
+    "V":  { "P": -0.10, "Q": -0.10, "E": 0.05, "X": 0.05, "R": -0.05, "VY": -0.05, "EX": 0.20, "A": -0.07, "IS": 0.10 }
+  },
+  "macro_apply": {
+    "waehrungen": { "pi": -0.10, "C": 0.10, "V": -0.05 },
+    "aktien_default": { "pi": -0.05, "C": 0.08, "V": -0.05 }
+  }
+}
