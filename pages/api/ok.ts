@@ -1,6 +1,0 @@
-// pages/api/ok.ts
-import type { NextApiRequest, NextApiResponse } from "next";
-
-export default function handler(_req: NextApiRequest, res: NextApiResponse) {
-  res.status(200).json({ ok: true, now: Date.now(), from: "pages-api" });
-}
