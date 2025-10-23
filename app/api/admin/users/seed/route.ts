@@ -8,17 +8,9 @@ import { parse as parseCSV } from "csv-parse/sync";
 type RowIn = Record<string, string | number | null | undefined>;
 type Row = { name: string; nip: string; role?: string; day?: string | null };
 
-// normaliza encabezados: quita espacios y pasa a minúsculas
 function normalizeHeader(h: string) {
   return h.trim().toLowerCase().replace(/\s+/g, "");
 }
-
-// mapea tus columnas reales:
-// name, day, id, user, password  (tabuladas)
-// - name -> name
-// - password o id -> nip (preferimos password; si falta, tomamos id)
-// - day (opcional)
-// - user lo ignoramos aquí (si lo necesitas, dime cómo guardarlo)
 function mapRow(r: RowIn): Row {
   const obj: Record<string, any> = {};
   for (const k of Object.keys(r)) obj[normalizeHeader(k)] = r[k];
@@ -28,7 +20,6 @@ function mapRow(r: RowIn): Row {
   const nip = nipRaw;
   const day = obj["day"] != null ? String(obj["day"]).trim() || null : null;
   const role = (obj["role"] ?? "student").toString().trim() || "student";
-
   return { name, nip, role, day };
 }
 
@@ -42,30 +33,19 @@ async function upsertUsers(rows: Row[]) {
         errors.push({ name: r.name, error: "name/nip requeridos" });
         continue;
       }
-
-      // Si tu NIP debe ser numérico, puedes validar aquí:
-      // if (!/^\d{1,12}$/.test(r.nip)) { ... }
-
       const codeHash = await bcrypt.hash(r.nip, 12);
 
-      // Tu User no tiene unique en "name", así que buscamos el existente por name
+      // Tu modelo no tiene unique(name), así que buscamos por name y actualizamos por id
       const prev = await prisma.user.findFirst({ where: { name: r.name } });
-
       if (prev) {
         await prisma.user.update({
-          where: { id: prev.id },           // id SÍ es único en tu modelo
+          where: { id: prev.id },
           data: { codeHash, day: r.day ?? prev.day },
         });
         updated++;
       } else {
         await prisma.user.create({
-          data: {
-            name: r.name,
-            codeHash,
-            day: r.day ?? null,
-            // agrega aquí otros defaults que tu modelo exija, ej:
-            // points: 0,
-          },
+          data: { name: r.name, codeHash, day: r.day ?? null },
         });
         created++;
       }
@@ -73,17 +53,18 @@ async function upsertUsers(rows: Row[]) {
       errors.push({ name: r.name, error: String(e?.message || e) });
     }
   }
-
   return { created, updated, errors };
 }
 
 export async function POST(req: NextRequest) {
-  const ct = req.headers.get("content-type") || "";
+  const ct = (req.headers.get("content-type") || "").toLowerCase();
   const buf = Buffer.from(await req.arrayBuffer());
 
   let rows: Row[] = [];
+
   try {
     if (ct.includes("application/json")) {
+      // JSON: asumimos UTF-8
       const data = JSON.parse(buf.toString("utf8"));
       const list = Array.isArray(data) ? data : data?.users;
       if (!Array.isArray(list)) {
@@ -91,18 +72,46 @@ export async function POST(req: NextRequest) {
       }
       rows = (list as RowIn[]).map(mapRow);
     } else {
-  const text = decodeBody ? decodeBody(buf) : buf.toString("utf8");
-  const parsed = parseCSV(text, {
-    columns: true,
-    bom: true,                 // ← acepta UTF-8 con BOM
-    skip_empty_lines: true,
-    trim: true,
-    delimiter: [",", ";", "\t"],
-    relax_column_count: true,
-    relax_quotes: true
-  }) as RowIn[];
-  rows = parsed.map(mapRow);
-}
+      // CSV/TSV: primero probamos UTF-8 (aceptando BOM), si falla intentamos Latin-1 y luego UTF-16 LE
+      const tryParse = (text: string) =>
+        parseCSV(text, {
+          columns: true,
+          bom: true,                 // acepta UTF-8 con BOM
+          skip_empty_lines: true,
+          trim: true,
+          delimiter: [",", ";", "\t"],
+          relax_column_count: true,
+          relax_quotes: true,
+        }) as RowIn[];
+
+      let parsed: RowIn[] | null = null;
+      let errorMsg = "";
+
+      // 1) UTF-8
+      try { parsed = tryParse(buf.toString("utf8")); } catch (e: any) { errorMsg = String(e?.message || e); }
+
+      // 2) Latin-1 si falló
+      if (!parsed) {
+        try { parsed = tryParse(buf.toString("latin1")); } catch {}
+      }
+
+      // 3) UTF-16 LE heurístico (si hay muchos 0x00)
+      if (!parsed) {
+        const zeros = buf.slice(0, Math.min(buf.length, 2048)).filter(b => b === 0).length;
+        if (zeros > 10) {
+          try {
+            const textUtf16 = new TextDecoder("utf-16le").decode(buf);
+            parsed = tryParse(textUtf16);
+          } catch {}
+        }
+      }
+
+      if (!parsed) {
+        return Response.json({ error: "No pude leer el cuerpo", detail: errorMsg || "CSV no reconocido" }, { status: 400 });
+      }
+
+      rows = parsed.map(mapRow);
+    }
   } catch (e: any) {
     return Response.json({ error: "No pude leer el cuerpo", detail: String(e?.message || e) }, { status: 400 });
   }
