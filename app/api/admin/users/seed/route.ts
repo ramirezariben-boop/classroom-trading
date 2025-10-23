@@ -91,15 +91,18 @@ export async function POST(req: NextRequest) {
       }
       rows = (list as RowIn[]).map(mapRow);
     } else {
-      // CSV con delimitador flexible: coma, punto y coma, o tabulador
-      const parsed = parseCSV(buf, {
-        columns: true,
-        skip_empty_lines: true,
-        trim: true,
-        delimiter: [",", ";", "\t"],
-      }) as RowIn[];
-      rows = parsed.map(mapRow);
-    }
+  const text = decodeBody ? decodeBody(buf) : buf.toString("utf8");
+  const parsed = parseCSV(text, {
+    columns: true,
+    bom: true,                 // ← acepta UTF-8 con BOM
+    skip_empty_lines: true,
+    trim: true,
+    delimiter: [",", ";", "\t"],
+    relax_column_count: true,
+    relax_quotes: true
+  }) as RowIn[];
+  rows = parsed.map(mapRow);
+}
   } catch (e: any) {
     return Response.json({ error: "No pude leer el cuerpo", detail: String(e?.message || e) }, { status: 400 });
   }
