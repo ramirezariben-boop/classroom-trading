@@ -1,13 +1,14 @@
-import ExportUsersButton from './_components/ExportUsersButton';
+// app/admin/page.tsx
+import ExportUsersButton from "./_components/ExportUsersButton";
 
 export default function AdminPage() {
   return (
-    <div className="p-4">
-      <div className="mb-4 flex items-center gap-3">
-        <h1 className="text-xl font-semibold">Panel Admin</h1>
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Panel de Administración</h1>
         <ExportUsersButton />
       </div>
-      {/* …tu resto del panel… */}
+      <p className="text-sm text-gray-500">/admin cargó ok.</p>
     </div>
   );
 }
