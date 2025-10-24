@@ -67,13 +67,16 @@ model Transfer {
 }
 
 model Candle {
-  valueId  String
-  time     BigInt
-  open     Float
-  high     Float
-  low      Float
-  close    Float
+  id        String   @id @default(cuid())
+  ticker    String
+  timeframe String   // "1m", "5m", "1h", etc.
+  ts        DateTime // inicio de la vela
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Float?   // opcional
 
-  @@unique([valueId, time])
-  @@index([valueId, time])
+  @@unique([ticker, timeframe, ts], name: "ticker_timeframe_ts")
+  @@index([ticker, timeframe, ts])
 }

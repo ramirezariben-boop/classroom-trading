@@ -10,7 +10,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "lint": "eslint",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev -n init",
+    "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "ts-node scripts/seed.ts",
     "sync:users": "node scripts/syncUsers.js"
   },

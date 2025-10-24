@@ -151,16 +151,18 @@ function pushBaseCandle(id: string, price: number, now: number, candleMs: number
     state.candlesBase.set(id, arr.slice(-1000));
 
     // Guarda SOLO cuando abre una vela nueva
-    void prisma.candle.create({
-      data: {
-        valueId: id,
-        time: BigInt(candle.time),
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-      },
-    }).catch(() => {});
+void prisma.candle.create({
+  data: {
+    ticker: id,              // ← mapeamos tu id a ticker
+    timeframe: "1m",         // ← 1m por tu lógica actual
+    ts: new Date(candle.time),
+    open: candle.open,
+    high: candle.high,
+    low: candle.low,
+    close: candle.close,
+  },
+}).catch(() => {});
+
     return;
   }
 
@@ -171,18 +173,20 @@ function pushBaseCandle(id: string, price: number, now: number, candleMs: number
   state.candlesBase.set(id, arr.slice(-1000));
 
   // ⬇️ CAMBIO CLAVE: update → upsert (si no existe, la crea)
-  void prisma.candle.upsert({
-    where: { valueId_time: { valueId: id, time: BigInt(last.time) } },
-    update: { high: last.high, low: last.low, close: last.close },
-    create: {
-      valueId: id,
-      time: BigInt(last.time),
-      open: last.open,
-      high: last.high,
-      low: last.low,
-      close: last.close,
-    },
-  }).catch(() => {});
+// CUANDO ACTUALIZAS LA VELA ABIERTA
+void prisma.candle.upsert({
+  where: { valueId_time: { valueId: id, time: BigInt(last.time) } },
+  update: { high: last.high, low: last.low, close: last.close },
+  create: {
+    valueId: id,
+    time: BigInt(last.time),
+    open: last.open,
+    high: last.high,
+    low: last.low,
+    close: last.close,
+  },
+}).catch(() => {});
+
 }
 
 export async function GET() {
@@ -209,19 +213,20 @@ export async function GET() {
     for (const id of Object.keys(DEFAULTS)) {
       try {
         // ⬇️ TRAE DESC y luego invierte para ascendente
-        const rows = await prisma.candle.findMany({
-          where: { valueId: id },
-          orderBy: { time: "desc" },
-          take: PRELOAD,
-        });
+       const rows = await prisma.candle.findMany({
+  where: { valueId: id },
+  orderBy: { time: "desc" },
+  take: PRELOAD,
+});
         if (rows.length) {
           const asc = rows.slice().reverse();
           state.candlesBase.set(
             id,
             asc.map(r => ({
-              time: Number(r.time),
-              open: r.open, high: r.high, low: r.low, close: r.close,
-            }))
+  time: new Date(r.ts).getTime(),
+  open: r.open, high: r.high, low: r.low, close: r.close,
+}))
+
           );
           const last = asc[asc.length - 1];
           state.lastPrices.set(id, last.close);
