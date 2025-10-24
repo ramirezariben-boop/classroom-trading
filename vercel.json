@@ -1,6 +1,0 @@
-{
-  "crons": [
-    { "path": "/api/price", "schedule": "*/1 * * * *" },
-    { "path": "/api/candles/capture?ticker=BAUMXP&tf=1m", "schedule": "*/1 * * * *" }
-  ]
-}
