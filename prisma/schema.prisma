@@ -1,82 +1,79 @@
-datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
-}
-
 generator client {
   provider = "prisma-client-js"
 }
 
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
 model User {
-  id        String   @id @default(cuid())           
+  id        String   @id @default(cuid())
   name      String
-  codeHash  String                  // hash del código/clave
-  points    Int      @default(5)
-  username  String?                 // ej. "angel"
-  day       String?                 // ej. "sab" | "dom"
+  points    Int
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt DateTime @updatedAt
 
   positions Position[]
   txs       Tx[]
-  outTxfs   Transfer[] @relation("outgoing")
-  inTxfs    Transfer[] @relation("incoming")
-
-  @@index([day])
+  transfersFrom Transfer[] @relation("fromUser")
+  transfersTo   Transfer[] @relation("toUser")
 }
 
-model Position {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  valueId   String
-  qty       Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  @@unique([userId, valueId])
+model Value {
+  id          String   @id
+  name        String
+  categoryId  String?
+  description String?
 }
 
 model Tx {
-  id       String   @id @default(cuid())
-  userId   String
-  user     User     @relation(fields: [userId], references: [id])
-  ts       DateTime @default(now())
-  type     String   // BUY | SELL | TRANSFER_IN | TRANSFER_OUT
-  valueId  String?
-  qty      Int?
-  deltaPts Decimal   // +/- puntos (deja Decimal para centavos)
+  id          String   @id @default(cuid())
+  ts          DateTime @default(now())
+  type        String
+  userId      String
+  valueId     String?
+  qty         Int?
+  deltaPoints Int
 
-  @@index([ts])
-  @@index([userId, ts])
+  user  User   @relation(fields: [userId], references: [id])
 }
 
 model Transfer {
-  id        String   @id @default(cuid())
-  fromId    String?
-  fromUser  User?    @relation("outgoing", fields: [fromId], references: [id])
-  toId      String?
-  toUser    User?    @relation("incoming", fields: [toId], references: [id])
-  amount    Int
-  ts        DateTime @default(now())
+  id     String   @id @default(cuid())
+  ts     DateTime @default(now())
+  fromId String
+  toId   String
+  amount Int
 
-  @@index([ts])
-  @@index([fromId, ts])
-  @@index([toId, ts])
+  fromUser User @relation("fromUser", fields: [fromId], references: [id])
+  toUser   User @relation("toUser", fields: [toId], references: [id])
+}
+
+model Position {
+  id       String   @id @default(cuid())
+  userId   String
+  valueId  String
+  quantity Int
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, valueId])
 }
 
 model Candle {
   id        String   @id @default(cuid())
   ticker    String
-  timeframe String   // "1m", "5m", "1h", etc.
-  ts        DateTime // inicio de la vela
+  timeframe String
+  ts        DateTime
   open      Float
   high      Float
   low       Float
   close     Float
-  volume    Float?   // opcional
+  volume    Float?
 
   @@unique([ticker, timeframe, ts], name: "ticker_timeframe_ts")
   @@index([ticker, timeframe, ts])
+
 }
