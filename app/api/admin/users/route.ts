@@ -1,23 +1,18 @@
 // app/api/admin/users/route.ts
 import { NextResponse } from "next/server";
-import bcrypt from "bcrypt";
 import { requireAdmin } from "@/lib/auth";
-
-// ⬇️ Ajusta este import a donde REALMENTE esté tu prisma.
-// Si tu archivo está en "app/lib/prisma.ts", usa esta línea:
-import { prisma } from "@/app/lib/prisma";
-// Si lo tienes en "lib/prisma.ts", cámbialo a: import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma"; // usa tu cliente prisma central
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /** Deriva rol solo para UI; no se guarda en DB */
-function roleOf(id: string): "ADMIN" | "USER" {
+function roleOf(id: number): "ADMIN" | "USER" {
   const list = (process.env.ADMIN_IDS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  return list.includes(id) ? "ADMIN" : "USER";
+  return list.includes(String(id)) ? "ADMIN" : "USER";
 }
 
 /** GET: listar usuarios (solo admin) */
@@ -25,13 +20,14 @@ export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const users = await prisma.user.findMany({ orderBy: { createdAt: "desc" } });
+  const users = await prisma.user.findMany({ orderBy: { id: "asc" } });
   const enhanced = users.map((u) => ({
     id: u.id,
     name: u.name,
-    points: Number(u.points), // Decimal -> number
+    user: u.user ?? null,
+    day: u.day ?? null,
+    points: u.points,
     role: roleOf(u.id),
-    createdAt: u.createdAt,
   }));
 
   return NextResponse.json({ users: enhanced });
@@ -43,21 +39,44 @@ export async function POST(req: Request) {
   if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   const body = await req.json().catch(() => ({} as any));
-  const { id, name, code } = body as { id?: string; name?: string; code?: string };
-  const points = typeof body.points === "number" ? body.points : 5; // default 5
+  const { id, name, password, user, day } = body as {
+    id?: number | string;
+    name?: string;
+    password?: string; // clave de 4 cifras
+    user?: string | null;
+    day?: string | null;
+  };
+  const points =
+    typeof body.points === "number" && Number.isFinite(body.points) ? body.points : 5;
 
-  if (!id || !name || !code) {
-    return NextResponse.json({ error: "Campos requeridos: id, name, code" }, { status: 400 });
+  if (!id || !name || !password) {
+    return NextResponse.json(
+      { error: "Campos requeridos: id, name, password" },
+      { status: 400 }
+    );
   }
 
   try {
-    const codeHash = await bcrypt.hash(code, 10);
     const u = await prisma.user.create({
-      data: { id, name, codeHash, points },
+      data: {
+        id: Number(id),
+        name,
+        password, // SIN hash (como acordamos)
+        user: user ?? null,
+        day: day ?? null,
+        points,
+      },
     });
     return NextResponse.json({
       ok: true,
-      user: { id: u.id, name: u.name, points: Number(u.points), role: roleOf(u.id) },
+      user: {
+        id: u.id,
+        name: u.name,
+        user: u.user,
+        day: u.day,
+        points: u.points,
+        role: roleOf(u.id),
+      },
     });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Error" }, { status: 400 });
@@ -70,18 +89,35 @@ export async function PUT(req: Request) {
   if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   const body = await req.json().catch(() => ({} as any));
-  const { id, newCode, newPoints } = body as { id?: string; newCode?: string; newPoints?: number };
+  const { id, newPassword, newPoints, user, day, name } = body as {
+    id?: number | string;
+    newPassword?: string;
+    newPoints?: number;
+    user?: string | null;
+    day?: string | null;
+    name?: string;
+  };
   if (!id) return NextResponse.json({ error: "Falta id" }, { status: 400 });
 
   const data: any = {};
-  if (typeof newPoints === "number") data.points = newPoints;
-  if (typeof newCode === "string" && newCode.length > 0) data.codeHash = await bcrypt.hash(newCode, 10);
+  if (typeof newPoints === "number" && Number.isFinite(newPoints)) data.points = newPoints;
+  if (typeof newPassword === "string" && newPassword.length > 0) data.password = newPassword;
+  if (typeof user !== "undefined") data.user = user;
+  if (typeof day !== "undefined") data.day = day;
+  if (typeof name === "string" && name.length > 0) data.name = name;
 
   try {
-    const u = await prisma.user.update({ where: { id }, data });
+    const u = await prisma.user.update({ where: { id: Number(id) }, data });
     return NextResponse.json({
       ok: true,
-      user: { id: u.id, name: u.name, points: Number(u.points), role: roleOf(u.id) },
+      user: {
+        id: u.id,
+        name: u.name,
+        user: u.user,
+        day: u.day,
+        points: u.points,
+        role: roleOf(u.id),
+      },
     });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Error" }, { status: 400 });
@@ -98,7 +134,7 @@ export async function DELETE(req: Request) {
   if (!id) return NextResponse.json({ error: "Falta id" }, { status: 400 });
 
   try {
-    await prisma.user.delete({ where: { id } });
+    await prisma.user.delete({ where: { id: Number(id) } });
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Error" }, { status: 400 });

@@ -3,26 +3,28 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  points    Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id       Int     @id
+  name     String
+  day      String?
+  user     String?
+  password String
+  points   Int     @default(0)
 
-  positions Position[]
-  txs       Tx[]
+  // back-relations (opcionales)
+  txs           Tx[]
+  positions     Position[]
   transfersFrom Transfer[] @relation("fromUser")
   transfersTo   Transfer[] @relation("toUser")
 }
 
 model Value {
-  id          String   @id
+  id          String  @id
   name        String
   categoryId  String?
   description String?
@@ -32,19 +34,19 @@ model Tx {
   id          String   @id @default(cuid())
   ts          DateTime @default(now())
   type        String
-  userId      String
+  userId      Int // <-- Int
   valueId     String?
   qty         Int?
   deltaPoints Int
 
-  user  User   @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 }
 
 model Transfer {
   id     String   @id @default(cuid())
   ts     DateTime @default(now())
-  fromId String
-  toId   String
+  fromId Int // <-- Int
+  toId   Int // <-- Int
   amount Int
 
   fromUser User @relation("fromUser", fields: [fromId], references: [id])
@@ -52,8 +54,8 @@ model Transfer {
 }
 
 model Position {
-  id       String   @id @default(cuid())
-  userId   String
+  id       String @id @default(cuid())
+  userId   Int // <-- Int
   valueId  String
   quantity Int
 
@@ -75,5 +77,4 @@ model Candle {
 
   @@unique([ticker, timeframe, ts], name: "ticker_timeframe_ts")
   @@index([ticker, timeframe, ts])
-
 }
