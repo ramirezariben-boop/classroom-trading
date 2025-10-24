@@ -1,8 +1,7 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiRequest, NextApiResponse } from "next";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // mínimo para verificar que la ruta existe
-  const { ticker = 'BAUMXP', tf = '1m', limit = '10' } = req.query as Record<string, string>;
-  res.setHeader('Cache-Control', 'no-store');
-  return res.status(200).json({ ok: true, tag: 'candles-pages', ticker, tf, limit: Number(limit) });
+  const { ticker = "BAUMXP", tf = "1m", limit = "10" } = req.query as Record<string, string>;
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(200).json({ ok: true, tag: "candles-pages", ticker, tf, limit: Number(limit) });
 }

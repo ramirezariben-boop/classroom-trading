@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
 export default async function handler(_req: NextApiRequest, res: NextApiResponse) {
-  res.setHeader("Cache-Control", "no-store");
-  return res.status(200).json({ ok: true, tag: "db-health-pages" });
+  return res.status(200).json({ ok: true, tag: "candles-bulk-pages" });
 }
