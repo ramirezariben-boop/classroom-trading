@@ -1,17 +1,12 @@
-// app/api/logout/route.ts
 import { NextResponse } from "next/server";
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
 export async function POST() {
-  const res = NextResponse.json({ ok: true });
-  res.cookies.set("ct_session", "", {
-    path: "/",
+  const res = NextResponse.json({ success: true });
+  res.cookies.set({
+    name: "session_token",
+    value: "",
     maxAge: 0,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    path: "/",
   });
   return res;
 }

@@ -1,20 +1,37 @@
 // app/api/txs/route.ts
 import { NextResponse } from "next/server";
+import { prisma } from "@/app/lib/prisma";
+import { getSessionUser } from "@/app/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Transacciones “globales” en memoria
-const GLOBAL_TXS = [
-  { id: "tx1", ts: new Date().toISOString(), type: "BUY", valueId: "baumxp", qty: 3, deltaPts: -435, userId: "ana01", userName: "Ana" },
-  { id: "tx2", ts: new Date().toISOString(), type: "SELL", valueId: "grmmxp", qty: 1, deltaPts: +40, userId: "luis03", userName: "Luis" },
-  { id: "tx3", ts: new Date().toISOString(), type: "TRANSFER_OUT", valueId: "baumxp", qty: 1, deltaPts: -100, userId: "ben_admin", userName: "Ben" },
-];
+export async function GET() {
+  const user = getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const scope = searchParams.get("scope") || "me";
+  const scope = user.role === "ADMIN" ? "all" : "me";
 
-  const txs = scope === "all" ? GLOBAL_TXS : GLOBAL_TXS.filter((t) => t.userId === "ana01");
-  return NextResponse.json({ txs }, { headers: { "Cache-Control": "no-store" } });
+  const txs = await prisma.tx.findMany({
+    where: scope === "me" ? { userId: Number(user.id) } : undefined,
+    orderBy: { ts: "desc" },
+    include: {
+      user: { select: { name: true } },
+    },
+  });
+
+  const mapped = txs.map((t) => ({
+    id: t.id,
+    ts: t.ts,
+    type: t.type,
+    valueId: t.valueId,
+    qty: t.qty,
+    deltaPts: t.deltaPts,
+    userId: t.userId,
+    userName: t.user?.name,
+  }));
+
+  return NextResponse.json({ txs: mapped });
 }

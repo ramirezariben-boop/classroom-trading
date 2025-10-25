@@ -96,15 +96,10 @@ const [prevMap, setPrevMap] = useState<Record<string, number>>({});
 useEffect(() => {
   (async () => {
     try {
-      const res = await fetch("/api/history?limit=2", { cache: "no-store" });
-      const json = await res.json();
-      if (json.ok && json.history?.length >= 2) {
-        const prev = json.history[json.history.length - 2].last_close;
-        setPrevMap(prev);
-      }
-    } catch (e) {
-      console.warn("No se pudo cargar historial diario", e);
-    }
+      const res = await fetch("/api/session", { cache: "no-store" });
+      const data = await res.json();
+      if (data.user) setUser(data.user);
+    } catch {}
   })();
 }, []);
 
@@ -151,6 +146,30 @@ useEffect(() => {
   // NEW: estado de portafolio real
   const [points, setPoints] = useState<number>(0);
   const [positions, setPositions] = useState<Record<string, number>>({});
+
+// === Valor total del portafolio (dinámico) ===
+const portfolioSummary = useMemo(() => {
+  if (!user || !positions || Object.keys(positions).length === 0) {
+    return null;
+  }
+
+  let invested = 0;  // cuánto costó originalmente
+  let currentValue = 0; // valor actual de esas posiciones
+
+  for (const [id, pos] of Object.entries(positions)) {
+    const value = values[id];
+    if (!value) continue;
+    invested += pos.qty * pos.avgPrice;
+    currentValue += pos.qty * value.price;
+  }
+
+  const profit = currentValue - invested;
+  const profitPct = invested > 0 ? (profit / invested) * 100 : 0;
+  const totalValue = currentValue + points;
+
+  return { invested, currentValue, profit, profitPct, totalValue };
+}, [positions, values, points, user]);
+
 
   // Login modal
   const [loginOpen, setLoginOpen] = useState(false);
@@ -326,30 +345,35 @@ useEffect(() => {
   }
 
   // NEW: leer portafolio del backend
-  async function refreshPortfolio() {
-    try {
-      const data = await api<{
-        points: number;
-        positions: { userId: string; valueId: string; qty: number }[];
-        txs: { id: string; ts: string; type: string; valueId?: string; qty?: number; deltaPts: number }[];
-      }>("/api/portfolio");
+async function refreshPortfolio() {
+  try {
+    const data = await api<{ 
+      points: number; 
+      positions: { valueId: string; qty: number; avgPrice: number }[]; 
+      txs: any[]; 
+    }>("/api/portfolio");
 
-      setPoints(Number(data.points));
-      console.log("🎯 Puntos cargados del backend:", data.points);
-      setPositions(Object.fromEntries(data.positions.map((p) => [p.valueId, p.qty])));
+    setPoints(Number(data.points));
 
-      const mapped = data.txs.map((t) => ({
-        id: t.id,
-        ts: new Date(t.ts).getTime(),
-        type: (t.type as any) ?? "RESET",
-        valueId: t.valueId,
-        qty: t.qty,
-        deltaPoints: Number(t.deltaPts),
-      }));
+    // Guarda tanto cantidad como avgPrice
+    const newPositions: Record<string, { qty: number; avgPrice: number }> = {};
+    for (const p of data.positions) newPositions[p.valueId] = { qty: p.qty, avgPrice: p.avgPrice };
+    setPositions(newPositions);
 
-      if (txScope === "me") setTxs(mapped);
-    } catch {}
+    const mapped = data.txs.map((t) => ({
+      id: t.id,
+      ts: new Date(t.ts).getTime(),
+      type: t.type,
+      valueId: t.valueId,
+      qty: t.qty,
+      deltaPoints: Number(t.deltaPts),
+    }));
+    if (txScope === "me") setTxs(mapped);
+  } catch (e) {
+    console.error("Error cargando portafolio", e);
   }
+}
+
 
   async function fetchTxs(scope: "me" | "all") {
     const res = await fetch(`/api/txs?scope=${scope}`);
@@ -508,6 +532,37 @@ useEffect(() => {
         </div>
       </header>
 
+{/* === Resumen global del portafolio === */}
+{user && portfolioSummary && (
+  <div className="mb-6 bg-neutral-900 border border-neutral-800 rounded-2xl p-4 max-w-6xl mx-auto flex flex-wrap justify-between gap-4">
+    <div>
+      <div className="text-sm text-neutral-400">Saldo disponible</div>
+      <div className="text-xl font-semibold">{fmt.format(points)} MXP</div>
+    </div>
+    <div>
+      <div className="text-sm text-neutral-400">Valor actual del portafolio</div>
+      <div className="text-xl font-semibold">{fmt.format(portfolioSummary.currentValue)} MXP</div>
+    </div>
+    <div>
+      <div className="text-sm text-neutral-400">Invertido originalmente</div>
+      <div className="text-xl font-semibold">{fmt.format(portfolioSummary.invested)} MXP</div>
+    </div>
+    <div>
+      <div className="text-sm text-neutral-400">Ganancia / pérdida actual</div>
+      <div
+        className={
+          "text-xl font-semibold " +
+          (portfolioSummary.profit >= 0 ? "text-emerald-400" : "text-red-400")
+        }
+      >
+        {portfolioSummary.profit >= 0 ? "+" : ""}
+        {fmt.format(portfolioSummary.profit)} MXP ({portfolioSummary.profitPct.toFixed(2)}%)
+      </div>
+    </div>
+  </div>
+)}
+
+
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
         <section className="lg:col-span-2 space-y-6">
           {categories.map((cat) => {
@@ -578,6 +633,30 @@ useEffect(() => {
                           <button onClick={() => setTrade({ mode: "BUY", valueId: v.id })} className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-1 rounded-xl">Comprar</button>
                           <button onClick={() => setTrade({ mode: "SELL", valueId: v.id })} className="flex-1 bg-red-600 hover:bg-red-500 py-1 rounded-xl">Vender</button>
                         </div>
+
+				{/* === Pérdida/Ganancia actual (solo si el alumno tiene ese activo) === */}
+{user && positions[v.id]?.qty > 0 && (
+  <div className="mt-2 text-sm">
+    <div className="text-neutral-400">
+      {positions[v.id].qty}x comprado a {fmt.format(positions[v.id].avgPrice)} MXP
+    </div>
+
+    {(() => {
+      const avg = positions[v.id].avgPrice;
+      const current = v.price;
+      const diff = current - avg;
+      const pct = ((diff / avg) * 100).toFixed(2);
+      const color = diff >= 0 ? "text-emerald-400" : "text-red-400";
+      return (
+        <div className={`text-xs ${color}`}>
+          {diff >= 0 ? "↑" : "↓"} {fmt.format(diff)} MXP ({pct}%)
+        </div>
+      );
+    })()}
+  </div>
+)}
+
+
                       </div>
                     ))}
                 </div>

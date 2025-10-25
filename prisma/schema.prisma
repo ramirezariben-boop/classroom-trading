@@ -3,28 +3,23 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = "postgresql://neondb_owner:npg_IG2udNxFlC6H@ep-round-smoke-ah7ta1yl-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require"
 }
 
 model User {
-  id       Int      @id
-  name     String
-  day      String?
-  user     String?
-  password String   @default("")
-  points   Int      @default(0)
-  nip     String?
-
-  // 👇 Agrega estas tres líneas para las relaciones inversas
-  txs           Tx[]
+  id            Int        @id
+  name          String
+  day           String?
+  user          String?
+  password      String     @default("")
+  points        Int        @default(0)
+  nip           String?
   positions     Position[]
   transfersFrom Transfer[] @relation("fromUser")
   transfersTo   Transfer[] @relation("toUser")
+  txs           Tx[] @relation("UserTxs")
 }
-
-
 
 model Value {
   id          String  @id
@@ -34,50 +29,47 @@ model Value {
 }
 
 model Tx {
-  id          String   @id @default(cuid())
-  ts          DateTime @default(now())
-  type        String
-  userId      Int // <-- Int
-  valueId     String?
-  qty         Int?
-  deltaPoints Int
-
-  user User @relation(fields: [userId], references: [id])
+  id        Int      @id @default(autoincrement())
+  user      User     @relation("UserTxs", fields: [userId], references: [id])
+  userId    Int
+  type      String   // BUY, SELL, TRANSFER_IN, TRANSFER_OUT, etc.
+  valueId   String?
+  qty       Float?
+  deltaPts  Float
+  ts        DateTime @default(now())
 }
 
 model Transfer {
-  id     String   @id @default(cuid())
-  ts     DateTime @default(now())
-  fromId Int // <-- Int
-  toId   Int // <-- Int
-  amount Int
-
-  fromUser User @relation("fromUser", fields: [fromId], references: [id])
-  toUser   User @relation("toUser", fields: [toId], references: [id])
+  id       String   @id @default(cuid())
+  ts       DateTime @default(now())
+  fromId   Int
+  toId     Int
+  amount   Int
+  fromUser User     @relation("fromUser", fields: [fromId], references: [id])
+  toUser   User     @relation("toUser", fields: [toId], references: [id])
 }
 
 model Position {
-  id       String @id @default(cuid())
-  userId   Int // <-- Int
-  valueId  String
-  quantity Int
-
-  user User @relation(fields: [userId], references: [id])
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  valueId   String
+  qty       Float
+  avgPrice  Float
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, valueId])
 }
 
 model Candle {
   valueId   String
-  time      BigInt
   timeframe String
   ts        DateTime
   open      Float
   high      Float
   low       Float
   close     Float
+  time      BigInt
 
   @@id([valueId, time])
 }
-
-

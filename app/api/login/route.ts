@@ -1,68 +1,52 @@
-// app/api/login/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import bcrypt from "bcryptjs";
-import { cookies } from "next/headers"; // 👈 agregado para manejar la cookie de sesión
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 export async function POST(req: Request) {
-  const body = await req.json();
+  const { userId, code } = await req.json();
 
-  console.log("📥 BODY RECIBIDO:", body);
+  console.log("📥 LOGIN:", { userId, code });
 
-  // Acepta diferentes nombres posibles
-  const id =
-    body.id ||
-    body.user ||
-    body.username ||
-    body.userid ||
-    body.userId;
-
-  const nip =
-    body.nip ||
-    body.password ||
-    body.clave ||
-    body.code;
-
-  if (!id || !nip) {
-    console.log("⚠️ Datos incompletos:", { id, nip });
+  if (!userId || !code)
     return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
-  }
 
-  // Busca al usuario por ID (numérico)
   const user = await prisma.user.findUnique({
-    where: { id: Number(id) },
+    where: { id: Number(userId) },
   });
 
-  if (!user) {
-    console.log("❌ Usuario no encontrado:", id);
-    return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-  }
+  if (!user) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
-  // Compara el NIP con el hash bcrypt guardado
-  const isValid = await bcrypt.compare(String(nip), user.password);
+  // compara nip (sin hash si lo guardaste plano)
+  const isValid =
+    user.password === code ||
+    (await bcrypt.compare(String(code), user.password));
 
-  if (!isValid) {
-    console.log("❌ Credenciales incorrectas:", { id, nip });
+  if (!isValid)
     return NextResponse.json({ error: "Credenciales incorrectas" }, { status: 401 });
-  }
 
-  console.log("✅ Login exitoso:", id);
+  const token = jwt.sign(
+    { id: user.id, name: user.name, role: "USER" },
+    JWT_SECRET,
+    { expiresIn: "7d" }
+  );
 
-  // 🔹 Guarda cookie de sesión (segura y accesible solo en el servidor)
   const res = NextResponse.json({
     success: true,
-    user: {
-      id: user.id,
-      name: user.name,
-      points: user.points,
-    },
+    user: { id: user.id, name: user.name, role: "USER" },
   });
 
-  res.cookies.set("userId", String(user.id), {
+  // crea cookie JWT segura
+  res.cookies.set({
+    name: "session_token",
+    value: token,
     httpOnly: true,
+    secure: true,
     sameSite: "lax",
     path: "/",
-    secure: process.env.NODE_ENV === "production" ? true : false,
+    maxAge: 60 * 60 * 24 * 7, // 7 días
   });
 
   return res;
