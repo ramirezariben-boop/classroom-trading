@@ -1,20 +1,28 @@
+import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
+// quita requireAdmin aquí: usaremos una llave temporal por query
+
 export const runtime = "nodejs";
-import { NextRequest } from "next/server";
-import prisma from "@/lib/prisma";
+export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
-  const key = req.headers.get("x-admin-key") ?? req.nextUrl.searchParams.get("key");
-  if (key !== process.env.ADMIN_KEY) return new Response("Unauthorized", { status: 401 });
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const key = url.searchParams.get("key");
+  const expected =
+    process.env.DEBUG_KEY || process.env.ADMIN_KEY || "superclave2025";
 
-  const [meta] = await prisma.$queryRaw<
-    Array<{ current_database: string; current_user: string }>
-  >`SELECT current_database(), current_user;`;
+  // si no viene la llave correcta, responde unauthorized
+  if (key !== expected) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
 
-  const count = await prisma.user.count();
+  const db = process.env.DATABASE_URL || "";
+  const host = db.split("@")[1]?.split("/")[0] || "unknown";
 
-  return Response.json({
-    db: meta?.current_database,
-    user: meta?.current_user,
-    userCount: count,
+  return NextResponse.json({
+    host,
+    commit: process.env.VERCEL_GIT_COMMIT_SHA || "local",
+    prismaClient: Prisma?.prismaVersion?.client || "unknown",
+    nodeEnv: process.env.NODE_ENV,
   });
 }
