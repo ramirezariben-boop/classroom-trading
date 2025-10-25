@@ -27,26 +27,21 @@ export async function POST(req: Request) {
 
     const user = await prisma.user.findUnique({ where: { id: decoded.id } });
     if (!user)
-      return NextResponse.json(
-        { error: "Usuario no encontrado" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
     const cantidad = Number(qty);
     const precio = Number(price);
     const total = +(cantidad * precio).toFixed(2);
     const ts = new Date();
 
-    // ✅ Validar puntos suficientes ANTES de cualquier operación
-    if (user.points < total) {
-      return NextResponse.json(
-        { error: "Fondos insuficientes" },
-        { status: 400 }
-      );
-    }
-
     // 🔹 Compra
     if (mode === "BUY") {
+      if (user.points < total)
+        return NextResponse.json(
+          { error: "Fondos insuficientes" },
+          { status: 400 }
+        );
+
       await prisma.$transaction([
         prisma.user.update({
           where: { id: user.id },
@@ -75,7 +70,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // 🔹 Venta — ahora también descuenta puntos (según tu nuevo criterio)
+    // 🔹 Venta (también descuenta puntos como pediste)
     if (mode === "SELL") {
       await prisma.$transaction([
         prisma.user.update({
@@ -88,7 +83,7 @@ export async function POST(req: Request) {
             type: "SELL",
             valueId,
             qty: cantidad,
-            deltaPts: -total, // 🔻 siempre negativo
+            deltaPts: -total,
             ts,
           },
         }),
@@ -100,9 +95,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Modo inválido" }, { status: 400 });
   } catch (err) {
     console.error("❌ Error en /api/trade:", err);
-    return NextResponse.json(
-      { error: "Error en el servidor" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error en el servidor" }, { status: 500 });
   }
 }

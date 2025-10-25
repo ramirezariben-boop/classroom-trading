@@ -181,6 +181,7 @@ const portfolioSummary = useMemo(() => {
   // NEW: transferencias
   const [transferTo, setTransferTo] = useState("");
   const [transferAmount, setTransferAmount] = useState<number>(0);
+  const [transferConcept, setTransferConcept] = useState("");
 
   // ==== Factores (leídos de archivo/endpoint) ====
   type Factors = {
@@ -384,6 +385,7 @@ async function refreshPortfolio() {
       valueId: t.valueId,
       qty: t.qty,
       deltaPoints: Number(t.deltaPts),
+      note: t.note,
     }));
     if (txScope === "me") setTxs(mapped);
   } catch (e) {
@@ -404,6 +406,7 @@ async function refreshPortfolio() {
       valueId: t.valueId,
       qty: t.qty,
       deltaPoints: Number(t.deltaPts),
+      note: t.note,
       userId: t.userId,
       userName: t.userName,
     }));
@@ -414,50 +417,58 @@ async function refreshPortfolio() {
     const price = values[valueId]?.price;
     if (!price || qty <= 0) return;
 
-    if (!user) {
-      const cost = +(price * qty).toFixed(2);
-      if (mode === "BUY" && student.points >= cost) {
-        setStudent((s) => ({ ...s, points: +(s.points - cost).toFixed(2) }));
-        setTxs((t) => [...t, { id: Math.random().toString(), ts: Date.now(), type: "BUY", valueId, qty, deltaPoints: -cost }]);
-      }
-      if (mode === "SELL") {
-        const gain = +(price * qty).toFixed(2);
-        setStudent((s) => ({ ...s, points: +(s.points + gain).toFixed(2) }));
-        setTxs((t) => [...t, { id: Math.random().toString(), ts: Date.now(), type: "SELL", valueId, qty, deltaPoints: gain }]);
-      }
-      return;
-    }
+if (!user) {
+  const cost = +(price * qty).toFixed(2);
 
-    try {
-      await api("/api/trade", {
-        method: "POST",
-        body: JSON.stringify({ mode, valueId, qty, price }),
-      });
-      await refreshPortfolio();
-    } catch (e: any) {
-      alert(e.message || "Error en trade");
-    }
+  // Si no tiene suficientes puntos, no puede hacer la operación
+  if (student.points < cost) {
+    alert("No tienes suficientes puntos para realizar esta operación.");
+    return;
   }
+
+  // En cualquier caso (comprar o vender), se descuentan los puntos
+  setStudent((s) => ({ ...s, points: +(s.points - cost).toFixed(2) }));
+  setTxs((t) => [
+    ...t,
+    {
+      id: Math.random().toString(),
+      ts: Date.now(),
+      type: mode,
+      valueId,
+      qty,
+      deltaPoints: -cost,
+    },
+  ]);
+  return;
+ }
+}
 
   // NEW: transferencias
-  async function doTransfer() {
-    if (!user) { setLoginOpen(true); return; }
-    const toUserId = transferTo.trim();
-    const amount = Number(transferAmount);
-    if (!toUserId || amount <= 0) return;
+async function doTransfer() {
+  if (!user) { setLoginOpen(true); return; }
+  const toUserId = transferTo.trim();
+  const amount = Number(transferAmount);
+  const concept = transferConcept.trim();
 
-    try {
-      await api("/api/transfer", {
-        method: "POST",
-        body: JSON.stringify({ toUserId, amount }),
-      });
-      setTransferAmount(0);
-      setTransferTo("");
-      await refreshPortfolio();
-    } catch (e: any) {
-      alert(e.message || "Error en transferencia");
-    }
+  if (!toUserId || amount <= 0 || !concept) {
+    alert("Completa todos los campos (ID, monto y concepto).");
+    return;
   }
+
+  try {
+    await api("/api/transfer", {
+      method: "POST",
+      body: JSON.stringify({ toUserId, amount, concept }),
+    });
+    setTransferAmount(0);
+    setTransferTo("");
+    setTransferConcept("");
+    await refreshPortfolio();
+  } catch (e: any) {
+    alert(e.message || "Error en transferencia");
+  }
+}
+
 
   if (!mounted) return null;
 
@@ -730,26 +741,34 @@ async function refreshPortfolio() {
           {/* NEW: Transferencias */}
           <div className="bg-neutral-900 rounded-2xl p-4 border border-neutral-800">
             <h3 className="font-semibold mb-2">Transferir MXP</h3>
+
             <div className="flex flex-col gap-2">
-              <input
-                placeholder="ID destino (ej. luis03)"
-                value={transferTo}
-                onChange={(e) => setTransferTo(e.target.value)}
-                className="bg-neutral-800 rounded-lg px-2 py-1"
-              />
-              <input
-                type="number"
-                min={1}
-                placeholder="Monto"
-                value={transferAmount}
-                onChange={(e) => setTransferAmount(Number(e.target.value))}
-                className="bg-neutral-800 rounded-lg px-2 py-1"
-              />
-              <button onClick={doTransfer} className="bg-emerald-600 hover:bg-emerald-500 px-3 py-1 rounded-lg">
-                Enviar
-              </button>
-              {!user && <div className="text-xs text-neutral-500">Inicia sesión para transferir.</div>}
-            </div>
+  <input
+    placeholder="ID destino (ej. luis03)"
+    value={transferTo}
+    onChange={(e) => setTransferTo(e.target.value)}
+    className="bg-neutral-800 rounded-lg px-2 py-1"
+  />
+  <input
+    type="number"
+    min={1}
+    placeholder="Monto"
+    value={transferAmount}
+    onChange={(e) => setTransferAmount(Number(e.target.value))}
+    className="bg-neutral-800 rounded-lg px-2 py-1"
+  />
+  <input
+    placeholder="Concepto (obligatorio)"
+    value={transferConcept}
+    onChange={(e) => setTransferConcept(e.target.value)}
+    className="bg-neutral-800 rounded-lg px-2 py-1"
+  />
+  <button onClick={doTransfer} className="bg-emerald-600 hover:bg-emerald-500 px-3 py-1 rounded-lg">
+    Enviar
+  </button>
+  {!user && <div className="text-xs text-neutral-500">Inicia sesión para transferir.</div>}
+</div>
+
           </div>
 
           {/* Transacciones */}
@@ -810,10 +829,18 @@ async function refreshPortfolio() {
 
                     {txScope === "all" && <span className="text-neutral-400">{t.userName ?? t.userId ?? "—"}</span>}
 
-                    <span className={t.deltaPoints >= 0 ? "text-emerald-400" : "text-red-400"}>
-                      {t.deltaPoints >= 0 ? "+" : ""}
-                      {t.deltaPoints.toFixed(2)}
-                    </span>
+<div className="text-right">
+  <span className={t.deltaPoints >= 0 ? "text-emerald-400" : "text-red-400"}>
+    {t.deltaPoints >= 0 ? "+" : ""}
+    {t.deltaPoints.toFixed(2)}
+  </span>
+  {t.note && (
+    <div className="text-xs text-neutral-500 italic mt-0.5">
+      {t.note}
+    </div>
+  )}
+</div>
+
                   </div>
                 ))}
             </div>

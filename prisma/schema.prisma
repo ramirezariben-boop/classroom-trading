@@ -37,6 +37,7 @@ model Tx {
   qty       Float?
   deltaPts  Float
   ts        DateTime @default(now())
+  note      String?  
 }
 
 model Transfer {

@@ -1,70 +1,74 @@
 // app/api/transfer/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
-import { getSessionUser } from "@/app/lib/auth";
+import jwt from "jsonwebtoken";
+import { cookies } from "next/headers";
+
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const user = getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
+  try {
+    const cookie = cookies().get("session_token");
+    if (!cookie)
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const body = await req.json().catch(() => ({}));
-  const toUserId = body.toUserId;
-  const amount = Number(body.amount);
+    const decoded = jwt.verify(cookie.value, JWT_SECRET) as { id: number };
 
-  if (!toUserId || !Number.isFinite(amount) || amount <= 0) {
-    return NextResponse.json({ error: "Faltan datos válidos" }, { status: 400 });
-  }
+    const { toUserId, amount, concept } = await req.json();
 
-  const fromUser = await prisma.user.findUnique({ where: { id: Number(user.id) } });
-  const toUser = await prisma.user.findUnique({ where: { id: Number(toUserId) } });
+    if (!toUserId || !amount || amount <= 0 || !concept?.trim())
+      return NextResponse.json({ error: "Datos inválidos o concepto vacío" }, { status: 400 });
 
-  if (!fromUser || !toUser) {
-    return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-  }
+    const sender = await prisma.user.findUnique({ where: { id: decoded.id } });
+    const receiver = await prisma.user.findUnique({ where: { id: Number(toUserId) } });
 
-  if (fromUser.points < amount) {
-    return NextResponse.json({ error: "Fondos insuficientes" }, { status: 400 });
-  }
+    if (!sender || !receiver)
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
-  const result = await prisma.$transaction(async (tx) => {
-    const updatedFrom = await tx.user.update({
-      where: { id: fromUser.id },
-      data: { points: { decrement: amount } },
-    });
+    if (sender.points < amount)
+      return NextResponse.json({ error: "Fondos insuficientes" }, { status: 400 });
 
-    const updatedTo = await tx.user.update({
-      where: { id: toUser.id },
-      data: { points: { increment: amount } },
-    });
+    const ts = new Date();
 
-    // Registra ambas transacciones
-    await tx.tx.createMany({
-      data: [
-        {
-          userId: fromUser.id,
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: sender.id },
+        data: { points: { decrement: amount } },
+      }),
+      prisma.user.update({
+        where: { id: receiver.id },
+        data: { points: { increment: amount } },
+      }),
+      prisma.tx.create({
+        data: {
+          userId: sender.id,
           type: "TRANSFER_OUT",
+          valueId: null,
+          qty: amount,
           deltaPts: -amount,
+          ts,
+          note: concept, // 🔹 guardamos concepto
         },
-        {
-          userId: toUser.id,
+      }),
+      prisma.tx.create({
+        data: {
+          userId: receiver.id,
           type: "TRANSFER_IN",
+          valueId: null,
+          qty: amount,
           deltaPts: amount,
+          ts,
+          note: concept, // 🔹 también en el receptor
         },
-      ],
-    });
+      }),
+    ]);
 
-    return { updatedFrom, updatedTo };
-  });
-
-  return NextResponse.json({
-    ok: true,
-    from: { id: fromUser.id, newPoints: result.updatedFrom.points },
-    to: { id: toUser.id, newPoints: result.updatedTo.points },
-    amount,
-  });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("❌ Error en /api/transfer:", err);
+    return NextResponse.json({ error: "Error en el servidor" }, { status: 500 });
+  }
 }
