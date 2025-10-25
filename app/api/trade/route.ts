@@ -1,131 +1,100 @@
 // app/api/trade/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
-import { getSessionUser } from "@/app/lib/auth";
+import jwt from "jsonwebtoken";
+import { cookies } from "next/headers";
+
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Mode = "BUY" | "SELL";
-
 export async function POST(req: Request) {
-  const user = getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
+  try {
+    const cookie = cookies().get("session_token");
+    if (!cookie)
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const body = await req.json();
-  const { mode, valueId, qty, price } = body;
+    const decoded = jwt.verify(cookie.value, JWT_SECRET) as {
+      id: number;
+      name: string;
+    };
 
-  if (!mode || !valueId || !qty || !price) {
-    return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
-  }
+    const { mode, valueId, qty, price } = await req.json();
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: Number(user.id) },
-  });
+    if (!mode || !valueId || !qty || !price)
+      return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
 
-  if (!dbUser) {
-    return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-  }
+    const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+    if (!user)
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
-  const total = price * qty;
+    const cantidad = Number(qty);
+    const precio = Number(price);
+    const total = +(cantidad * precio).toFixed(2);
+    const ts = new Date();
 
-  // Busca si ya hay posición del activo
-  const pos = await prisma.position.findUnique({
-    where: { userId_valueId: { userId: dbUser.id, valueId } },
-  });
+    // 🔹 Compra
+    if (mode === "BUY") {
+      if (user.points < total)
+        return NextResponse.json(
+          { error: "Fondos insuficientes" },
+          { status: 400 }
+        );
 
-  let deltaPoints = 0;
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: user.id },
+          data: { points: { decrement: total } },
+        }),
+        prisma.tx.create({
+          data: {
+            userId: user.id,
+            type: "BUY",
+            valueId,
+            qty: cantidad,
+            deltaPts: -total,
+            ts,
+          },
+        }),
+        prisma.position.upsert({
+          where: { userId_valueId: { userId: user.id, valueId } },
+          update: {
+            qty: { increment: cantidad },
+            avgPrice: precio, // simplificado
+          },
+          create: { userId: user.id, valueId, qty: cantidad, avgPrice: precio },
+        }),
+      ]);
 
-  // === COMPRAR ===
-  if (mode === "BUY") {
-    if (dbUser.points < total) {
-      return NextResponse.json({ error: "Fondos insuficientes" }, { status: 400 });
+      return NextResponse.json({ ok: true });
     }
 
-    // Calcula nuevo promedio ponderado
-    const newQty = (pos?.qty ?? 0) + qty;
-    const newAvg =
-      pos ? (pos.avgPrice * pos.qty + price * qty) / newQty : price;
+    // 🔹 Venta (también descuenta puntos como pediste)
+    if (mode === "SELL") {
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: user.id },
+          data: { points: { decrement: total } },
+        }),
+        prisma.tx.create({
+          data: {
+            userId: user.id,
+            type: "SELL",
+            valueId,
+            qty: cantidad,
+            deltaPts: -total,
+            ts,
+          },
+        }),
+      ]);
 
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: dbUser.id },
-        data: { points: { decrement: total } },
-      });
-
-      await tx.position.upsert({
-        where: { userId_valueId: { userId: dbUser.id, valueId } },
-        update: { qty: newQty, avgPrice: newAvg },
-        create: { userId: dbUser.id, valueId, qty, avgPrice: price },
-      });
-
-      await tx.tx.create({
-        data: {
-          userId: dbUser.id,
-          type: "BUY",
-          valueId,
-          qty,
-          deltaPts: -total,
-        },
-      });
-    });
-
-    deltaPoints = -total;
-  }
-
-  // === VENDER ===
-  if (mode === "SELL") {
-    if (!pos || pos.qty < qty) {
-      return NextResponse.json({ error: "No tienes suficientes unidades para vender" }, { status: 400 });
+      return NextResponse.json({ ok: true });
     }
 
-    const remainingQty = pos.qty - qty;
-    const proceeds = price * qty;
-
-    await prisma.$transaction(async (tx) => {
-      // Actualiza posición (si llega a 0, la borra)
-      if (remainingQty > 0) {
-        await tx.position.update({
-          where: { id: pos.id },
-          data: { qty: remainingQty },
-        });
-      } else {
-        await tx.position.delete({ where: { id: pos.id } });
-      }
-
-      // Descuenta también una pequeña comisión (por ejemplo 1%)
-      const commission = proceeds * 0.01;
-      const netProceeds = proceeds - commission;
-
-      await tx.user.update({
-        where: { id: dbUser.id },
-        data: { points: { increment: netProceeds } },
-      });
-
-      await tx.tx.create({
-        data: {
-          userId: dbUser.id,
-          type: "SELL",
-          valueId,
-          qty,
-          deltaPts: netProceeds,
-        },
-      });
-    });
-
-    deltaPoints = proceeds;
+    return NextResponse.json({ error: "Modo inválido" }, { status: 400 });
+  } catch (err) {
+    console.error("❌ Error en /api/trade:", err);
+    return NextResponse.json({ error: "Error en el servidor" }, { status: 500 });
   }
-
-  // Devuelve saldo actualizado
-  const updatedUser = await prisma.user.findUnique({
-    where: { id: dbUser.id },
-  });
-
-  return NextResponse.json({
-    success: true,
-    newPoints: updatedUser?.points ?? 0,
-    delta: deltaPoints,
-  });
 }

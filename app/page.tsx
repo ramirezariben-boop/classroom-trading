@@ -93,16 +93,18 @@ export default function Page() {
 // === Historial (para variación diaria) ===
 const [prevMap, setPrevMap] = useState<Record<string, number>>({});
 
+// Recupera la sesión activa al recargar la página
 useEffect(() => {
   (async () => {
     try {
       const res = await fetch("/api/session", { cache: "no-store" });
       const data = await res.json();
       if (data.user) setUser(data.user);
-    } catch {}
+    } catch (e) {
+      console.warn("No se pudo verificar la sesión al iniciar:", e);
+    }
   })();
 }, []);
-
 
   // Estado “demo” (seguirá visible si NO hay sesión)
   const [student, setStudent] = useState<{ name: string; points: number }>({ name: "Alumno Demo", points: 0 });
@@ -305,33 +307,48 @@ useEffect(() => {
     return json;
   }
 
-  async function handleLogin() {
-    const userId = loginId.trim();
-    const code = loginCode.trim();
-    if (!userId || !code) {
-      alert("Completa ID y Clave");
-      return;
+async function handleLogin() {
+  const userId = loginId.trim();
+  const code = loginCode.trim();
+
+  if (!userId || !code) {
+    alert("Completa ID y Clave");
+    return;
+  }
+
+  try {
+    // 🔐 Hace login: guarda cookie JWT (httpOnly) automáticamente
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, code }),
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Error al iniciar sesión");
     }
-    try {
-      const result = await api<{ ok: boolean; user: ApiUser }>("/api/login", {
-        method: "POST",
-        body: JSON.stringify({ userId, code }),
-      });
-      setUser(result.user);
+
+    // ✅ La cookie ya se guardó. Ahora pedimos /api/session para obtener el usuario
+    const sessionRes = await fetch("/api/session", { cache: "no-store" });
+    const sessionData = await sessionRes.json();
+
+    if (sessionData.user) {
+      setUser(sessionData.user);
       setLoginOpen(false);
       setLoginId("");
       setLoginCode("");
       await refreshPortfolio();
-	window.location.reload();
-      if (result.user.role === "ADMIN") {
-        setTxScope("all");
-        const all = await fetchTxs("all");
-        setTxs(all);
-      }
-    } catch (e: any) {
-      alert(e.message || "No se pudo iniciar sesión");
+    } else {
+      throw new Error("No se pudo verificar la sesión");
     }
+  } catch (e: any) {
+    console.error("Error de login:", e);
+    alert(e.message || "No se pudo iniciar sesión");
   }
+}
+
 
   async function handleLogout() {
     try {
@@ -613,6 +630,23 @@ async function refreshPortfolio() {
                             </div>
                           </div>
                         </div>
+{positions[v.id] && (
+  <div className="mt-2 text-sm">
+    <div className="text-neutral-400">
+      Posees {positions[v.id].qty} u a {fmt.format(positions[v.id].avgPrice)} MXP c/u
+    </div>
+    <div
+      className={
+        v.price >= positions[v.id].avgPrice
+          ? "text-emerald-400 text-xs"
+          : "text-red-400 text-xs"
+      }
+    >
+      {v.price >= positions[v.id].avgPrice ? "▲" : "▼"}{" "}
+      {(((v.price / positions[v.id].avgPrice) - 1) * 100).toFixed(2)}%
+    </div>
+  </div>
+)}
 
 {prevMap[v.name] && (
   <div className={"text-[11px] " + (v.price >= prevMap[v.name] ? "text-emerald-400" : "text-red-400")}>

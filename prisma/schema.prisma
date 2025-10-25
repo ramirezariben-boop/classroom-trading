@@ -13,7 +13,7 @@ model User {
   day           String?
   user          String?
   password      String     @default("")
-  points        Int        @default(0)
+  points        Float        @default(0)
   nip           String?
   positions     Position[]
   transfersFrom Transfer[] @relation("fromUser")
