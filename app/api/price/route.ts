@@ -145,26 +145,28 @@ function pushBaseCandle(id: string, price: number, now: number, candleMs: number
 
   const openNew = !last || now - last.time >= candleMs;
 
-  if (openNew) {
-    const candle = { time: now, open: price, high: price, low: price, close: price };
-    arr.push(candle);
-    state.candlesBase.set(id, arr.slice(-1000));
+ if (openNew) {
+  const candle = { time: now, open: price, high: price, low: price, close: price };
+  arr.push(candle);
+  state.candlesBase.set(id, arr.slice(-1000));
 
-    // Guarda SOLO cuando abre una vela nueva
-void prisma.candle.create({
-  data: {
-    ticker: id,              // ← mapeamos tu id a ticker
-    timeframe: "1m",         // ← 1m por tu lógica actual
-    ts: new Date(candle.time),
-    open: candle.open,
-    high: candle.high,
-    low: candle.low,
-    close: candle.close,
-  },
-}).catch(() => {});
+  // Guarda SOLO cuando abre una vela nueva
+  void prisma.candle.create({
+    data: {
+      valueId: id,
+      time: BigInt(candle.time),   // ✅ agregado
+      timeframe: "1m",
+      ts: new Date(candle.time),
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+    },
+  }).catch(() => {});
 
-    return;
-  }
+  return;
+}
+
 
   // Actualiza vela abierta en memoria
   if (price > last.high) last.high = price;

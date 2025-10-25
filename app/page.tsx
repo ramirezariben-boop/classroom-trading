@@ -110,7 +110,7 @@ useEffect(() => {
 
 
   // Estado “demo” (seguirá visible si NO hay sesión)
-  const [student, setStudent] = useState<{ name: string; points: number }>({ name: "Alumno Demo", points: 1000 });
+  const [student, setStudent] = useState<{ name: string; points: number }>({ name: "Alumno Demo", points: 0 });
 
   const [categories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [values, setValues] = useState<Record<string, Value>>(
@@ -303,6 +303,7 @@ useEffect(() => {
       setLoginId("");
       setLoginCode("");
       await refreshPortfolio();
+	window.location.reload();
       if (result.user.role === "ADMIN") {
         setTxScope("all");
         const all = await fetchTxs("all");
@@ -318,7 +319,6 @@ useEffect(() => {
       await api("/api/logout", { method: "POST" });
       setUser(null);
       setPoints(0);
-      setPositions({});
       setTxs([]);
     } catch (e: any) {
       alert(e.message || "No se pudo cerrar sesión");
@@ -335,6 +335,7 @@ useEffect(() => {
       }>("/api/portfolio");
 
       setPoints(Number(data.points));
+      console.log("🎯 Puntos cargados del backend:", data.points);
       setPositions(Object.fromEntries(data.positions.map((p) => [p.valueId, p.qty])));
 
       const mapped = data.txs.map((t) => ({
@@ -434,9 +435,9 @@ useEffect(() => {
           <h1 className="text-2xl font-bold">📈 Classroom Trading</h1>
           <p className="text-neutral-400">
             {user ? (
-              <>Bienvenido, <span className="font-semibold">{user.name}</span>. Tienes {fmt.format(points)} pts.</>
+              <>Willkommen, <span className="font-semibold">{user.name}</span>. Du hast {fmt.format(points)} MXP </>
             ) : (
-              <>Bienvenido, {student.name}. Tienes {fmt.format(student.points)} pts. (Modo demo)</>
+              <>Willkommen, {student.name}. Du hast {fmt.format(student.points)} MXP (Modo demo)</>
             )}
           </p>
           {/* Nota de factores (informativa) */}

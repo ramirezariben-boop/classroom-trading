@@ -9,19 +9,22 @@ datasource db {
 }
 
 model User {
-  id       Int     @id
+  id       Int      @id
   name     String
   day      String?
   user     String?
-  password String
-  points   Int     @default(0)
+  password String   @default("")
+  points   Int      @default(0)
+  nip     String?
 
-  // back-relations (opcionales)
+  // 👇 Agrega estas tres líneas para las relaciones inversas
   txs           Tx[]
   positions     Position[]
   transfersFrom Transfer[] @relation("fromUser")
   transfersTo   Transfer[] @relation("toUser")
 }
+
+
 
 model Value {
   id          String  @id
@@ -65,16 +68,16 @@ model Position {
 }
 
 model Candle {
-  id        String   @id @default(cuid())
-  ticker    String
+  valueId   String
+  time      BigInt
   timeframe String
   ts        DateTime
   open      Float
   high      Float
   low       Float
   close     Float
-  volume    Float?
 
-  @@unique([ticker, timeframe, ts], name: "ticker_timeframe_ts")
-  @@index([ticker, timeframe, ts])
+  @@id([valueId, time])
 }
+
+
