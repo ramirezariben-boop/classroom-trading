@@ -5,8 +5,7 @@ import fsp from "fs/promises";
 import path from "path";
 // ⬇️ AJUSTA ESTA RUTA a donde esté tu prisma:
 import { prisma } from "@/app/lib/prisma";
-import { saveCandle } from "@/app/lib/saveCandle";
-
+import { saveCandle } from "@/lib/saveCandle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
