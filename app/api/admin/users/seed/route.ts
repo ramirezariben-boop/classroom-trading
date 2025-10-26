@@ -5,7 +5,6 @@ import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
 import { parse as parseCSV } from "csv-parse/sync";
 
-// === Tipos ===
 type RowIn = Record<string, string | number | null | undefined>;
 type Row = {
   id?: number;
@@ -16,22 +15,20 @@ type Row = {
   points?: number | null;
 };
 
-// === Helpers ===
 function normalizeHeader(h: string) {
   return h.trim().toLowerCase().replace(/\s+/g, "");
 }
 
-// === mapRow ===
 function mapRow(r: RowIn): Row {
   const obj: Record<string, any> = {};
   for (const k of Object.keys(r)) {
-    const key = normalizeHeader(k.replace(/^\uFEFF/, "")); // limpia BOM si existe
+    const key = normalizeHeader(k.replace(/^\uFEFF/, "")); // 🔹 quita BOM invisible si existe
     obj[key] = r[k];
   }
 
   const id = obj["id"] ? Number(obj["id"]) : undefined;
-  const name = (obj["name"] ?? "").toString().trim();
-  const nip = (obj["password"] ?? obj["nip"] ?? "").toString().trim();
+  const name = (obj["name"] ?? obj["user"] ?? "").toString().trim();
+  const nip = (obj["password"] ?? obj["nip"] ?? obj["id"] ?? "").toString().trim();
   const day = obj["day"] != null ? String(obj["day"]).trim() || null : null;
   const role = (obj["role"] ?? "student").toString().trim() || "student";
   const points =
@@ -42,10 +39,9 @@ function mapRow(r: RowIn): Row {
   return { id, name, nip, role, day, points };
 }
 
-// === upsertUsers ===
+
 async function upsertUsers(rows: Row[]) {
-  let created = 0,
-    updated = 0;
+  let created = 0, updated = 0;
   const errors: Array<{ id?: number; error: string }> = [];
 
   for (const r of rows) {
@@ -55,9 +51,9 @@ async function upsertUsers(rows: Row[]) {
         continue;
       }
 
-      const codeHash = await bcrypt.hash(r.nip, 12);
+      const passwordHash = await bcrypt.hash(r.nip, 12);
 
-      // 🔹 Buscar usuario por id (numérico)
+      // Buscar por ID
       const prev = await prisma.user.findUnique({ where: { id: r.id } });
 
       if (prev) {
@@ -65,10 +61,10 @@ async function upsertUsers(rows: Row[]) {
           where: { id: r.id },
           data: {
             name: r.name,
-            codeHash,
             day: r.day ?? prev.day,
-            role: r.role ?? prev.role,
-            points: r.points ?? prev.points,
+            password: passwordHash,   // ✅ actualiza hash
+            nip: r.nip,               // guarda nip en texto claro si quieres
+            points: r.points ?? prev.points, // ✅ actualiza puntos
           },
         });
         updated++;
@@ -77,9 +73,10 @@ async function upsertUsers(rows: Row[]) {
           data: {
             id: r.id,
             name: r.name,
-            codeHash,
+            user: r.name.split(" ")[0].toLowerCase(), // opcional
             day: r.day ?? null,
-            role: r.role ?? "student",
+            password: passwordHash,
+            nip: r.nip,
             points: r.points ?? 0,
           },
         });
@@ -94,7 +91,7 @@ async function upsertUsers(rows: Row[]) {
   return { created, updated, errors };
 }
 
-// === POST ===
+
 export async function POST(req: NextRequest) {
   const ct = (req.headers.get("content-type") || "").toLowerCase();
   const buf = Buffer.from(await req.arrayBuffer());
@@ -105,10 +102,7 @@ export async function POST(req: NextRequest) {
       const data = JSON.parse(buf.toString("utf8"));
       const list = Array.isArray(data) ? data : data?.users;
       if (!Array.isArray(list)) {
-        return Response.json(
-          { error: "JSON debe ser array o {users:[...]}" },
-          { status: 400 }
-        );
+        return Response.json({ error: "JSON debe ser array o {users:[...]}" }, { status: 400 });
       }
       rows = (list as RowIn[]).map(mapRow);
     } else {
@@ -139,9 +133,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (!parsed) {
-        const zeros = buf
-          .slice(0, Math.min(buf.length, 2048))
-          .filter((b) => b === 0).length;
+        const zeros = buf.slice(0, Math.min(buf.length, 2048)).filter((b) => b === 0).length;
         if (zeros > 10) {
           try {
             const textUtf16 = new TextDecoder("utf-16le").decode(buf);
@@ -152,10 +144,7 @@ export async function POST(req: NextRequest) {
 
       if (!parsed) {
         return Response.json(
-          {
-            error: "No pude leer el cuerpo",
-            detail: errorMsg || "CSV no reconocido",
-          },
+          { error: "No pude leer el cuerpo", detail: errorMsg || "CSV no reconocido" },
           { status: 400 }
         );
       }
