@@ -5,6 +5,8 @@ import fsp from "fs/promises";
 import path from "path";
 // ⬇️ AJUSTA ESTA RUTA a donde esté tu prisma:
 import { prisma } from "@/app/lib/prisma";
+import { saveCandle } from "@/app/lib/saveCandle";
+
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -142,30 +144,17 @@ function computeDailyBaseline(sig: Signals, factors: any) {
 function pushBaseCandle(id: string, price: number, now: number, candleMs: number) {
   const arr = state.candlesBase.get(id) ?? [];
   const last = arr[arr.length - 1];
-
   const openNew = !last || now - last.time >= candleMs;
 
- if (openNew) {
-  const candle = { time: now, open: price, high: price, low: price, close: price };
-  arr.push(candle);
-  state.candlesBase.set(id, arr.slice(-1000));
+  if (openNew) {
+    const candle = { time: now, open: price, high: price, low: price, close: price };
+    arr.push(candle);
+    state.candlesBase.set(id, arr.slice(-1000));
 
-  // Guarda SOLO cuando abre una vela nueva
-  void prisma.candle.create({
-    data: {
-      valueId: id,
-      time: BigInt(candle.time),   // ✅ agregado
-      timeframe: "1m",
-      ts: new Date(candle.time),
-      open: candle.open,
-      high: candle.high,
-      low: candle.low,
-      close: candle.close,
-    },
-  }).catch(() => {});
-
-  return;
-}
+    // Guarda solo al abrir vela nueva
+    void saveCandle(id, "5m", candle);
+    return;
+  }
 
 
   // Actualiza vela abierta en memoria
@@ -173,22 +162,8 @@ function pushBaseCandle(id: string, price: number, now: number, candleMs: number
   if (price < last.low)  last.low  = price;
   last.close = price;
   state.candlesBase.set(id, arr.slice(-1000));
-
-  // ⬇️ CAMBIO CLAVE: update → upsert (si no existe, la crea)
-// CUANDO ACTUALIZAS LA VELA ABIERTA
-void prisma.candle.upsert({
-  where: { valueId_time: { valueId: id, time: BigInt(last.time) } },
-  update: { high: last.high, low: last.low, close: last.close },
-  create: {
-    valueId: id,
-    time: BigInt(last.time),
-    open: last.open,
-    high: last.high,
-    low: last.low,
-    close: last.close,
-  },
-}).catch(() => {});
-
+  // Actualiza en la base de datos
+  void saveCandle(id, "5m", last);
 }
 
 export async function GET() {

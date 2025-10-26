@@ -32,20 +32,40 @@ export async function POST(req: Request) {
         { status: 404 }
       );
 
+    // ✅ Recuperamos la categoría del valor
+    const value = await prisma.value.findUnique({
+      where: { id: valueId },
+      select: { categoryId: true },
+    });
+
+    if (!value)
+      return NextResponse.json(
+        { error: "Valor no encontrado" },
+        { status: 404 }
+      );
+
+    // 🚫 Bloqueo de ventas de bienes ("Güter")
+    if (mode === "SELL" && value.categoryId === "guter") {
+      return NextResponse.json(
+        { error: "No se pueden vender bienes (Güter)." },
+        { status: 400 }
+      );
+    }
+
     const cantidad = Number(qty);
     const precio = Number(price);
     const total = +(cantidad * precio).toFixed(2);
     const ts = new Date();
 
-    // ✅ Validar puntos suficientes ANTES de cualquier operación
-    if (user.points < total) {
+    // ✅ Validar puntos suficientes ANTES de cualquier operación (solo en compras)
+    if (mode === "BUY" && user.points < total) {
       return NextResponse.json(
         { error: "Fondos insuficientes" },
         { status: 400 }
       );
     }
 
-    // 🔹 Compra
+    // 🔹 COMPRA
     if (mode === "BUY") {
       await prisma.$transaction([
         prisma.user.update({
@@ -75,7 +95,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // 🔹 Venta — ahora también descuenta puntos (según tu nuevo criterio)
+    // 🔹 VENTA
     if (mode === "SELL") {
       await prisma.$transaction([
         prisma.user.update({

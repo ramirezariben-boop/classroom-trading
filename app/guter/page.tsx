@@ -1,9 +1,12 @@
 // app/guter/page.tsx
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 
 export default function GuterPage() {
+  const [selected, setSelected] = useState<string | null>(null);
+
   const bienes = [
     {
       categoria: "Krimi",
@@ -67,7 +70,8 @@ export default function GuterPage() {
               {cat.imagenes.map((img, i) => (
                 <div
                   key={i}
-                  className="relative group overflow-hidden rounded-xl border border-neutral-800 hover:border-emerald-600 transition"
+                  onClick={() => setSelected(img)}
+                  className="relative group overflow-hidden rounded-xl border border-neutral-800 hover:border-emerald-600 cursor-pointer transition"
                 >
                   <img
                     src={img}
@@ -80,6 +84,28 @@ export default function GuterPage() {
           </section>
         ))}
       </div>
+
+      {/* Modal de imagen ampliada */}
+      {selected && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setSelected(null)}
+        >
+          <div className="relative max-w-3xl w-full">
+            <img
+              src={selected}
+              alt="Vista ampliada"
+              className="rounded-2xl w-full max-h-[80vh] object-contain border border-neutral-700"
+            />
+            <button
+              onClick={() => setSelected(null)}
+              className="absolute top-3 right-3 bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-1.5 rounded-lg text-sm"
+            >
+              ✕ Cerrar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Pie */}
       <footer className="mt-12 text-center text-neutral-500 text-sm">
