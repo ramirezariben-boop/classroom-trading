@@ -21,17 +21,24 @@ function normalizeHeader(h: string) {
 
 function mapRow(r: RowIn): Row {
   const obj: Record<string, any> = {};
-  for (const k of Object.keys(r)) obj[normalizeHeader(k)] = r[k];
+  for (const k of Object.keys(r)) {
+    const key = normalizeHeader(k.replace(/^\uFEFF/, "")); // 🔹 quita BOM invisible si existe
+    obj[key] = r[k];
+  }
 
   const id = obj["id"] ? Number(obj["id"]) : undefined;
   const name = (obj["name"] ?? obj["user"] ?? "").toString().trim();
-  const nip = (obj["password"] ?? obj["nip"] ?? "").toString().trim();
+  const nip = (obj["password"] ?? obj["nip"] ?? obj["id"] ?? "").toString().trim();
   const day = obj["day"] != null ? String(obj["day"]).trim() || null : null;
   const role = (obj["role"] ?? "student").toString().trim() || "student";
-  const points = obj["points"] != null ? Number(obj["points"]) : null;
+  const points =
+    obj["points"] != null && obj["points"] !== ""
+      ? Number(String(obj["points"]).replace(",", "."))
+      : null;
 
   return { id, name, nip, role, day, points };
 }
+
 
 async function upsertUsers(rows: Row[]) {
   let created = 0,
