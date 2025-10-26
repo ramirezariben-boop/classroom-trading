@@ -1,8 +1,13 @@
-// components/CandleChart.tsx
 "use client";
 import React, { useState, useRef, useEffect } from "react";
 
-export type Candle = { time: number; open: number; high: number; low: number; close: number };
+export type Candle = {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+};
 
 type Props = {
   candles: Candle[];
@@ -26,8 +31,8 @@ const fmtTime = new Intl.DateTimeFormat("es-MX", {
 
 export default function CandleChart({
   candles,
-  width = 360,
-  height = 250,
+  width = 600,
+  height = 360,
   bodyWidthRatio = 0.45,
   candleMinWidth = 1.5,
   candleMaxWidth = 10,
@@ -39,9 +44,8 @@ export default function CandleChart({
   // === Estados principales ===
   const [targetZoom, setTargetZoom] = useState(1);
   const [targetPan, setTargetPan] = useState(0);
-  const [zoom, setZoom] = useState(2);
+  const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState(0);
-
   const [isDragging, setIsDragging] = useState(false);
   const [lastX, setLastX] = useState(0);
 
@@ -52,7 +56,7 @@ export default function CandleChart({
     visible: false,
   });
 
-  // === Interpolación suave ===
+  // === Interpolación suave de zoom/pan ===
   useEffect(() => {
     let anim: number;
     const smooth = () => {
@@ -82,7 +86,7 @@ export default function CandleChart({
     });
   }
 
-  // === Pan con arrastre ===
+  // === Arrastre con clic sostenido ===
   function handleMouseDown(e: React.MouseEvent) {
     e.preventDefault();
     setIsDragging(true);
@@ -102,20 +106,19 @@ export default function CandleChart({
     const rect = svgRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    if (x >= 56 && x <= width - 10 && y >= 8 && y <= height - 22) {
+    if (x >= 56 && x <= rect.width - 10 && y >= 8 && y <= rect.height - 22) {
       setCross({ x, y, visible: true });
     } else {
       setCross((c) => ({ ...c, visible: false }));
     }
   }
-
   function handleMouseLeave() {
     setIsDragging(false);
     setCross((c) => ({ ...c, visible: false }));
   }
 
   // === Determinar velas visibles ===
-  const visibleCount = Math.max(80, Math.max(4, Math.floor(40 / zoom)));
+  const visibleCount = Math.max(40, Math.floor(80 / zoom));
   const total = candles.length;
   const startIdx = Math.max(0, total - visibleCount - Math.floor(pan / 10));
   const endIdx = Math.min(total, startIdx + visibleCount);
@@ -132,8 +135,11 @@ export default function CandleChart({
   const chartW = width - marginLeft - marginRight;
   const chartH = height - marginTop - marginBottom;
 
-  const min = Math.min(...data.map((c) => c.low));
-  const max = Math.max(...data.map((c) => c.high));
+  // === Escala automática ===
+  const lows = data.map((c) => c.low);
+  const highs = data.map((c) => c.high);
+  const min = Math.min(...lows) * 0.999;
+  const max = Math.max(...highs) * 1.001;
   const denom = max - min || 1;
 
   const xStep = chartW / Math.max(1, data.length - 1);
@@ -155,7 +161,6 @@ export default function CandleChart({
     (_, i) => Math.round((i * (data.length - 1)) / Math.max(1, xTicks - 1))
   );
 
-  // === Determinar índice más cercano para crosshair ===
   const nearestIndex = cross.visible
     ? Math.max(0, Math.min(data.length - 1, Math.round((cross.x - marginLeft) / xStep)))
     : -1;
@@ -169,7 +174,7 @@ export default function CandleChart({
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
       onMouseMove={handleMouseMove}
-      className="select-none cursor-grab active:cursor-grabbing relative"
+      className="select-none cursor-grab active:cursor-grabbing relative w-full"
     >
       <svg
         ref={svgRef}
@@ -181,7 +186,7 @@ export default function CandleChart({
       >
         <rect x={0} y={0} width={width} height={height} fill="transparent" />
 
-        {/* Ejes y ticks Y */}
+        {/* Ejes Y */}
         <line
           x1={marginLeft}
           x2={marginLeft}
@@ -236,7 +241,7 @@ export default function CandleChart({
                 x2={cx}
                 y1={marginTop + chartH}
                 y2={marginTop + chartH + 4}
-                stroke="#2a2a"
+                stroke="#2a2a2a"
                 strokeWidth={1}
               />
               <text
@@ -264,7 +269,7 @@ export default function CandleChart({
           const bodyBottom = up ? o : cl;
           const bodyH = Math.max(1, bodyBottom - bodyTop);
           const color = up ? "#16a34a" : "#dc2626";
-	  const isLast = i === data.length - 1;
+          const isLast = i === data.length - 1;
           return (
             <g key={c.time} className={isLast ? "animate-pulse-slow" : ""}>
               <title>{`O:${c.open} H:${c.high} L:${c.low} C:${c.close} • ${fmtTime.format(
@@ -283,10 +288,9 @@ export default function CandleChart({
           );
         })}
 
-        {/* === Crosshair === */}
+        {/* Crosshair */}
         {cross.visible && nearestCandle && (
           <>
-            {/* Línea vertical */}
             <line
               x1={x(nearestIndex)}
               x2={x(nearestIndex)}
@@ -296,7 +300,6 @@ export default function CandleChart({
               strokeWidth={1}
               strokeDasharray="2,2"
             />
-            {/* Etiqueta de precio (izquierda) */}
             <rect
               x={0}
               y={y(nearestCandle.close) - 8}
@@ -313,7 +316,6 @@ export default function CandleChart({
             >
               {fmtPrice.format(nearestCandle.close)}
             </text>
-            {/* Etiqueta de hora (abajo) */}
             <rect
               x={x(nearestIndex) - 24}
               y={height - marginBottom + 4}

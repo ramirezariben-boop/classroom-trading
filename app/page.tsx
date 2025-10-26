@@ -38,7 +38,6 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: "werte", name: "Werte", description: "Puntos" },
   { id: "zehntel", name: "Zehntel", description: "Décimas" },
   { id: "guter", name: "Güter", description: "Mercancías" },
-  { id: "vocabulario", name: "Vocabulario", description: "Léxico y contextos" },
 ];
 
 const DEFAULT_VALUES: Value[] = [
@@ -694,7 +693,7 @@ export default function Page() {
             href="/guter"
             className="inline-block mt-6 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition"
           >
-            📚 Ver bienes disponibles
+            📚 Sieh die verfügbaren Güter
           </Link>
         </section>
 
