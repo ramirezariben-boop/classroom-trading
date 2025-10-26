@@ -4,7 +4,9 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
 import { parse as parseCSV } from "csv-parse/sync";
+import https from "https";
 
+// === Tipos ===
 type RowIn = Record<string, string | number | null | undefined>;
 type Row = {
   id?: number;
@@ -14,10 +16,29 @@ type Row = {
   points?: number | null;
 };
 
+// === Helpers ===
 function normalizeHeader(h: string) {
   return h.trim().toLowerCase().replace(/\s+/g, "");
 }
 
+// === Descargar CSV desde GitHub ===
+async function fetchCSVFromGitHub(): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    https
+      .get(
+        // 🔧 Sustituye la URL con tu repo real
+        "https://raw.githubusercontent.com/ramirezariben-boop/classroom-trading/main/data/users_utf8.csv",
+        (res) => {
+          const data: Uint8Array[] = [];
+          res.on("data", (chunk) => data.push(chunk));
+          res.on("end", () => resolve(Buffer.concat(data)));
+        }
+      )
+      .on("error", reject);
+  });
+}
+
+// === mapRow ===
 function mapRow(r: RowIn): Row {
   const obj: Record<string, any> = {};
   for (const k of Object.keys(r)) {
@@ -37,6 +58,7 @@ function mapRow(r: RowIn): Row {
   return { id, name, nip, day, points };
 }
 
+// === upsertUsers ===
 async function upsertUsers(rows: Row[]) {
   let created = 0,
     updated = 0;
@@ -89,11 +111,11 @@ async function upsertUsers(rows: Row[]) {
   return { created, updated, errors, touched };
 }
 
+// === POST ===
 export async function POST(req: NextRequest) {
   try {
-    const ct = (req.headers.get("content-type") || "").toLowerCase();
-    const buf = Buffer.from(await req.arrayBuffer());
-    let rows: Row[] = [];
+    console.log("🚀 Descargando CSV desde GitHub...");
+    const buf = await fetchCSVFromGitHub();
 
     const tryParse = (text: string) =>
       parseCSV(text, {
@@ -105,7 +127,7 @@ export async function POST(req: NextRequest) {
       }) as RowIn[];
 
     const parsed = tryParse(buf.toString("utf8"));
-    rows = parsed.map(mapRow);
+    const rows = parsed.map(mapRow);
 
     const count = rows.length;
     const ids = rows.map((r) => r.id).slice(0, 10);
@@ -115,6 +137,7 @@ export async function POST(req: NextRequest) {
 
     return Response.json({
       ok: true,
+      source: "GitHub",
       rowsRead: count,
       sampleIds: ids,
       created,
