@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const filePath = path.resolve(process.cwd(), "public/daily_input.json");
+    const filePath = path.join(process.cwd(), "public, "daily_input.json");
     const raw = await fs.readFile(filePath, "utf8");
     const json = JSON.parse(raw);
 
