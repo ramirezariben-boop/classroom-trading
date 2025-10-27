@@ -1,0 +1,32 @@
+{
+  "ok": true,
+  "generatedAt": "2025-10-27T02:00:51.735Z",
+  "nextUpdate": "2025-10-28T00:00:00.000Z",
+  "top5": [
+    {
+      "id": 51,
+      "user": "MUÑOZ SANCHEZ SANDYBELL PAMELA",
+      "points": 25.345
+    },
+    {
+      "id": 5,
+      "user": "CRESPO LOPEZ AXL ARTURO",
+      "points": 23.345
+    },
+    {
+      "id": 15,
+      "user": "HERNANDEZ VERGARA ALEJANDRO",
+      "points": 21.88
+    },
+    {
+      "id": 61,
+      "user": "VELADIZ ALDACO RODRIGO",
+      "points": 21.1375
+    },
+    {
+      "id": 35,
+      "user": "BENITO GONZALEZ MARIA DEL ROSARIO",
+      "points": 20.89
+    }
+  ]
+}

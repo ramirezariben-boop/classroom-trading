@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const file = path.join(process.cwd(), "data", "daily_input.json");
-    const raw = await fs.readFile(file, "utf8");
+    const filePath = path.resolve(process.cwd(), "public/daily_input.json");
+    const raw = await fs.readFile(filePath, "utf8");
     const json = JSON.parse(raw);
 
     // 🧮 Calcular ratio likes/vistas
@@ -21,7 +21,7 @@ export async function GET() {
     const dom = json.grupos?.domingo || {};
 
     const out = {
-      date: json.date,
+      date: new Date(json.date + "T18:00:00-06:00").toISOString(),
       canal_ratio: ratio,
       sabado: {
         participacion: sab.participacion?.puntos_totales ?? null,

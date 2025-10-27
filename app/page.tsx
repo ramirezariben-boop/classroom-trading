@@ -272,11 +272,14 @@ useEffect(() => {
         year: "numeric",
       });
       const nextUpdate = calcNextMondayAt18();
-      const nextText = new Date(nextUpdate).toLocaleString("es-MX", {
-        weekday: "long",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+const nextText = new Date(nextUpdate).toLocaleString("es-MX", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 
       const infoDiv = document.getElementById("dailyInfo");
       if (infoDiv) {
