@@ -1,14 +1,16 @@
 // app/api/top/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import prisma from "@/lib/prisma";
 import fs from "node:fs/promises";
 import path from "node:path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// 📁 Archivo donde se guarda el top5 semanal
 const CACHE_FILE = path.join(process.cwd(), "public", "top5_cache.json");
 
+// 🕕 Calcula la próxima fecha de lunes 6:00 p.m. hora de México
 function nextMondayAt18() {
   const now = new Date();
   const next = new Date(now);
@@ -21,26 +23,21 @@ function nextMondayAt18() {
 
 export async function GET() {
   try {
+    // 🔹 Intenta leer el cache existente
     let cached: any = null;
     try {
       const raw = await fs.readFile(CACHE_FILE, "utf8");
       cached = JSON.parse(raw);
     } catch {
-      // si no existe, lo generamos más abajo
+      // Si no existe, se recalcula abajo
     }
 
     const now = new Date();
     const nextUpdate = cached?.nextUpdate ? new Date(cached.nextUpdate) : null;
 
-    // ✅ Si hay cache válido, devuelve sólo top5 y metadatos
+    // ✅ Si el cache sigue vigente, úsalo
     if (cached && nextUpdate && now < nextUpdate) {
-      return NextResponse.json({
-        ok: true,
-        fromCache: true,
-        generatedAt: cached.generatedAt,
-        nextUpdate: cached.nextUpdate,
-        top5: cached.top5 ?? [],
-      });
+      return NextResponse.json(cached);
     }
 
     // ⚙️ Recalcula top5 desde Prisma
@@ -51,6 +48,14 @@ export async function GET() {
       select: { id: true, name: true, points: true },
     });
 
+    if (!users || users.length === 0) {
+      console.warn("⚠ No se encontraron usuarios en la base de datos.");
+      return NextResponse.json(
+        { ok: false, top5: [], message: "No hay usuarios registrados." },
+        { status: 200 }
+      );
+    }
+
     const top5 = users.map((u) => ({
       id: u.id,
       user: u.name,
@@ -59,19 +64,19 @@ export async function GET() {
 
     const payload = {
       ok: true,
-      fromCache: false,
       generatedAt: now.toISOString(),
       nextUpdate: nextMondayAt18().toISOString(),
       top5,
     };
 
+    // 💾 Guarda cache temporal
     await fs.writeFile(CACHE_FILE, JSON.stringify(payload, null, 2), "utf8");
 
     return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
-  } catch (err) {
+  } catch (err: any) {
     console.error("❌ Error en /api/top:", err);
     return NextResponse.json(
-      { ok: false, error: "No se pudo obtener el top 5" },
+      { ok: false, error: err?.message || "Error interno del servidor" },
       { status: 500 }
     );
   }

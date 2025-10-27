@@ -1,0 +1,32 @@
+{
+  "ok": true,
+  "generatedAt": "2025-10-27T03:49:11.049Z",
+  "nextUpdate": "2025-10-28T00:00:00.000Z",
+  "top5": [
+    {
+      "id": 56,
+      "user": "ROJAS ESPINOZA NEFF HUMBERTO",
+      "points": 32.6425
+    },
+    {
+      "id": 61,
+      "user": "VELADIZ ALDACO RODRIGO",
+      "points": 31.1375
+    },
+    {
+      "id": 40,
+      "user": "CRUZ CENTENO CRISTIAN",
+      "points": 28.6625
+    },
+    {
+      "id": 51,
+      "user": "MUÑOZ SANCHEZ SANDYBELL PAMELA",
+      "points": 25.345
+    },
+    {
+      "id": 5,
+      "user": "CRESPO LOPEZ AXL ARTURO",
+      "points": 23.345
+    }
+  ]
+}
