@@ -1,6 +1,6 @@
 ﻿export const runtime = "nodejs";
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
 import { parse as parseCSV } from "csv-parse/sync";
@@ -26,7 +26,6 @@ async function fetchCSVFromGitHub(): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     https
       .get(
-        // 🔧 Sustituye la URL con tu repo real
         "https://raw.githubusercontent.com/ramirezariben-boop/classroom-trading/main/data/users_utf8.csv",
         (res) => {
           const data: Uint8Array[] = [];
@@ -65,55 +64,62 @@ async function upsertUsers(rows: Row[]) {
   const errors: Array<{ id?: number; error: string }> = [];
   const touched: number[] = [];
 
-  for (const r of rows) {
-    try {
-      if (!r.id || !r.nip) {
-        errors.push({ id: r.id, error: "id/nip requeridos" });
-        continue;
-      }
+  const BATCH_SIZE = 10; // ⚡ Procesa 10 usuarios simultáneamente
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      batch.map(async (r) => {
+        try {
+          if (!r.id || !r.nip) throw new Error("id/nip requeridos");
+          const passwordHash = await bcrypt.hash(r.nip, 12);
+          const prev = await prisma.user.findUnique({ where: { id: r.id } });
 
-      const passwordHash = await bcrypt.hash(r.nip, 12);
-      const prev = await prisma.user.findUnique({ where: { id: r.id } });
-
-      if (prev) {
-        await prisma.user.update({
-          where: { id: r.id },
-          data: {
-            name: r.name,
-            password: passwordHash,
-            nip: r.nip,
-            day: r.day ?? prev.day,
-            points: r.points ?? prev.points,
-          },
-        });
-        updated++;
-        touched.push(r.id);
-      } else {
-        await prisma.user.create({
-          data: {
-            id: r.id,
-            name: r.name,
-            password: passwordHash,
-            nip: r.nip,
-            day: r.day ?? null,
-            points: r.points ?? 0,
-          },
-        });
-        created++;
-        touched.push(r.id);
-      }
-    } catch (e: any) {
-      errors.push({ id: r.id, error: String(e?.message || e) });
-    }
+          if (prev) {
+            await prisma.user.update({
+              where: { id: r.id },
+              data: {
+                name: r.name,
+                password: passwordHash,
+                nip: r.nip,
+                day: r.day ?? prev.day,
+                points: r.points ?? prev.points,
+              },
+            });
+            updated++;
+          } else {
+            await prisma.user.create({
+              data: {
+                id: r.id,
+                name: r.name,
+                password: passwordHash,
+                nip: r.nip,
+                day: r.day ?? null,
+                points: r.points ?? 0,
+              },
+            });
+            created++;
+          }
+          touched.push(r.id);
+        } catch (e: any) {
+          errors.push({ id: r.id, error: String(e?.message || e) });
+        }
+      })
+    );
   }
 
   console.log("✅ Procesados:", touched.length, "IDs:", touched.slice(0, 10));
   return { created, updated, errors, touched };
 }
 
-// === POST ===
-export async function POST(req: NextRequest) {
+// === GET ===
+export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url);
+    const key = searchParams.get("key");
+    if (key !== "superclave2025") {
+      return NextResponse.json({ error: "Clave incorrecta" }, { status: 403 });
+    }
+
     console.log("🚀 Descargando CSV desde GitHub...");
     const buf = await fetchCSVFromGitHub();
 
@@ -135,19 +141,21 @@ export async function POST(req: NextRequest) {
 
     const { created, updated, errors, touched } = await upsertUsers(rows);
 
-    return Response.json({
+    console.log(`✅ Usuarios procesados: ${rows.length}`);
+    return NextResponse.json({
       ok: true,
-      source: "GitHub",
-      rowsRead: count,
-      sampleIds: ids,
+      message: `Actualización completa (${rows.length} registros)`,
       created,
       updated,
       errorsCount: errors.length,
-      errors,
+      sampleIds: ids,
       touched: touched.slice(0, 10),
     });
   } catch (err: any) {
     console.error("❌ Error general en seed:", err);
-    return Response.json({ error: String(err?.message || err) }, { status: 500 });
+    return NextResponse.json(
+      { error: String(err?.message || err) },
+      { status: 500 }
+    );
   }
 }
