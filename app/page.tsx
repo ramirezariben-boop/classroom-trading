@@ -237,6 +237,138 @@ export default function Page() {
     return () => clearInterval(timer);
   }, [mounted]);
 
+const [top5, setTop5] = useState<{ id:number; user:string; points:number }[]>([]);
+
+useEffect(() => {
+  (async () => {
+    const res = await fetch("/api/top");
+    const data = await res.json();
+    setTop5(data.top5);
+  })();
+}, []);
+
+useEffect(() => {
+  let timer: any;
+
+  async function loadDailyData() {
+    try {
+      const res = await fetch("/api/daily", { cache: "no-store" });
+      if (!res.ok) throw new Error("Error cargando métricas");
+      const data = await res.json();
+
+      const summary = `
+        <div>🎥 Canal: ${(data.canal_ratio * 100).toFixed(2)}% likes/vistas</div>
+        <div>📚 Sábado · Part: ${data.sabado.participacion ?? "-"} · Asist: ${data.sabado.asistencia ?? "-"}%</div>
+        <div>📚 Domingo · Part: ${data.domingo.participacion ?? "-"} · Asist: ${data.domingo.asistencia ?? "-"}%</div>
+      `;
+      const div = document.getElementById("dailySummary");
+      if (div) div.innerHTML = summary;
+
+      // ==== Actualiza la línea "Última actualización" ====
+      const lastUpdated = new Date(data.date).toLocaleDateString("es-MX", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+      const nextUpdate = calcNextMondayAt18();
+      const nextText = new Date(nextUpdate).toLocaleString("es-MX", {
+        weekday: "long",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      const infoDiv = document.getElementById("dailyInfo");
+      if (infoDiv) {
+        infoDiv.innerHTML = `
+          <div class="text-[11px] text-neutral-500 mt-1">
+            Última actualización: ${lastUpdated} · Próxima: ${nextText}
+          </div>
+        `;
+      }
+
+      // ==== Gráfico ====
+      const { default: Chart } = await import("chart.js/auto");
+      const ctx = document.getElementById("dailyLineChart") as HTMLCanvasElement;
+      if (!ctx) return;
+
+      new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: ["Participación", "Evaluaciones", "Tareas extra", "Asistencia"],
+          datasets: [
+            {
+              label: "Sábado",
+              borderColor: "#3b82f6",
+              backgroundColor: "#3b82f6",
+              fill: false,
+              tension: 0.3,
+              data: [
+                data.sabado.participacion,
+                data.sabado.evaluaciones,
+                data.sabado.tareas_extra,
+                data.sabado.asistencia,
+              ],
+            },
+            {
+              label: "Domingo",
+              borderColor: "#f59e0b",
+              backgroundColor: "#f59e0b",
+              fill: false,
+              tension: 0.3,
+              data: [
+                data.domingo.participacion,
+                data.domingo.evaluaciones,
+                data.domingo.tareas_extra,
+                data.domingo.asistencia,
+              ],
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: "bottom", labels: { color: "#ddd" } } },
+          scales: {
+            x: { ticks: { color: "#aaa" } },
+            y: { ticks: { color: "#aaa" }, beginAtZero: true },
+          },
+        },
+      });
+    } catch (err) {
+      console.error("Error cargando daily:", err);
+      const div = document.getElementById("dailySummary");
+      if (div) div.textContent = "No se pudieron cargar los datos.";
+    }
+  }
+
+  function calcNextMondayAt18() {
+    const now = new Date();
+    const next = new Date(now);
+    const day = now.getDay(); // 0=Dom, 1=Lun, ...
+    const daysToMonday = (1 - day + 7) % 7 || 7;
+    next.setDate(now.getDate() + daysToMonday);
+    next.setHours(18, 0, 0, 0);
+    return next.getTime();
+  }
+
+  function scheduleNextUpdate() {
+    const delay = calcNextMondayAt18() - Date.now();
+    console.log(`⏳ Próxima actualización de /api/daily: ${new Date(Date.now() + delay).toLocaleString("es-MX")}`);
+
+    timer = setTimeout(() => {
+      loadDailyData();
+      scheduleNextUpdate();
+    }, delay);
+  }
+
+  loadDailyData();      // Carga inicial
+  scheduleNextUpdate(); // Programa el refresco semanal
+
+  return () => clearTimeout(timer);
+}, []);
+
+
+
   // === Resample helper ===
   function resample(candles: Candle[], tfMs: number): Candle[] {
     if (!candles?.length) return [];
@@ -358,24 +490,44 @@ export default function Page() {
   }
 
   // === Trading ===
-  async function placeOrder(mode: "BUY" | "SELL", valueId: string, qty: number) {
-    const price = values[valueId]?.price;
-    if (!price || qty <= 0) return;
+async function placeOrder(mode: "BUY" | "SELL", valueId: string, qty: number) {
+  const price = values[valueId]?.price;
+  if (!price || qty <= 0) return;
 
-    if (!user) {
-      const cost = +(price * qty).toFixed(2);
-      if (student.points < cost) {
-        alert("No tienes suficientes puntos para realizar esta operación.");
-        return;
-      }
-      setStudent((s) => ({ ...s, points: +(s.points - cost).toFixed(2) }));
-      setTxs((t) => [
-        ...t,
-        { id: Math.random().toString(), ts: Date.now(), type: mode, valueId, qty, deltaPoints: -cost },
-      ]);
+  // 🧪 Si no hay usuario: modo demo
+  if (!user) {
+    const cost = +(price * qty).toFixed(2);
+    if (student.points < cost) {
+      alert("No tienes suficientes puntos para realizar esta operación.");
       return;
     }
+    setStudent((s) => ({ ...s, points: +(s.points - cost).toFixed(2) }));
+    setTxs((t) => [
+      ...t,
+      { id: Math.random().toString(), ts: Date.now(), type: mode, valueId, qty, deltaPoints: -cost },
+    ]);
+    return;
   }
+
+  // 👇 Usuarios logueados (caso real)
+  try {
+    const res = await fetch("/api/trade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode, valueId, qty, price }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Error al procesar la operación.");
+
+    // Refrescar portafolio y transacciones
+    await refreshPortfolio();
+    setTrade(null);
+  } catch (e: any) {
+    alert(e.message || "Error al procesar la operación");
+  }
+}
+
 
   // === Transferencias ===
   async function doTransfer() {
@@ -863,8 +1015,33 @@ export default function Page() {
                 ))}
             </div>
           </div>
+
+{/* ==== Top 5 Usuarios ==== */}
+<div className="bg-neutral-900 rounded-2xl p-4 border border-neutral-800">
+  <h3 className="font-semibold mb-2">🏆 Top 5 usuarios</h3>
+  <div className="space-y-1">
+    {top5.map((u, i) => (
+      <div key={u.id} className="flex justify-between text-sm border-b border-neutral-800 py-1">
+        <span>{i + 1}. {u.user}</span>
+        <span className="text-neutral-400">{u.points.toFixed(2)} MXP</span>
+      </div>
+    ))}
+  </div>
+</div>
+
+{/* ==== Métricas semanales ==== */}
+<div className="bg-neutral-900 rounded-2xl p-4 border border-neutral-800">
+  <h3 className="font-semibold mb-2">📊 Factores semanales</h3>
+  <div id="dailySummary" className="text-xs text-neutral-400 mb-2">
+    Cargando datos...
+  </div>
+  <canvas id="dailyLineChart" className="w-full h-40"></canvas>
+<div id="dailyInfo" className="text-[11px] text-neutral-500 mt-2 text-right"></div>
+</div> 
+
         </aside>
       </main>
+
 
       {/* ==== Modal de Gráfico ==== */}
       {chartFor && selected && (

@@ -15,20 +15,21 @@ export async function POST(req: Request) {
     if (!cookie)
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-    const decoded = jwt.verify(cookie.value, JWT_SECRET) as { id: number };
-
+    const decoded = jwt.verify(cookie.value, JWT_SECRET) as { id: number; name: string };
     const { toUserId, amount, concept } = await req.json();
 
-    if (!toUserId || !amount || amount <= 0 || !concept?.trim())
-      return NextResponse.json({ error: "Datos inválidos o concepto vacío" }, { status: 400 });
+    if (!toUserId || !amount || !concept)
+      return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
 
     const sender = await prisma.user.findUnique({ where: { id: decoded.id } });
-    const receiver = await prisma.user.findUnique({ where: { id: Number(toUserId) } });
+    const receiver = await prisma.user.findUnique({ where: { id: toUserId } });
 
     if (!sender || !receiver)
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
-    if (sender.points < amount)
+    const amt = Number(amount);
+    if (amt <= 0) return NextResponse.json({ error: "Monto inválido" }, { status: 400 });
+    if (sender.points < amt)
       return NextResponse.json({ error: "Fondos insuficientes" }, { status: 400 });
 
     const ts = new Date();
@@ -36,32 +37,28 @@ export async function POST(req: Request) {
     await prisma.$transaction([
       prisma.user.update({
         where: { id: sender.id },
-        data: { points: { decrement: amount } },
+        data: { points: { decrement: amt } },
       }),
       prisma.user.update({
         where: { id: receiver.id },
-        data: { points: { increment: amount } },
+        data: { points: { increment: amt } },
       }),
       prisma.tx.create({
         data: {
           userId: sender.id,
           type: "TRANSFER_OUT",
-          valueId: null,
-          qty: amount,
-          deltaPts: -amount,
+          deltaPts: -amt,
+          note: `→ ${receiver.name} (${receiver.id}) · ${concept}`,
           ts,
-          note: concept, // 🔹 guardamos concepto
         },
       }),
       prisma.tx.create({
         data: {
           userId: receiver.id,
           type: "TRANSFER_IN",
-          valueId: null,
-          qty: amount,
-          deltaPts: amount,
+          deltaPts: amt,
+          note: `← ${sender.name} (${sender.id}) · ${concept}`,
           ts,
-          note: concept, // 🔹 también en el receptor
         },
       }),
     ]);
