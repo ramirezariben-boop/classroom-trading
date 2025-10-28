@@ -218,62 +218,42 @@ useEffect(() => {
     return () => { stop = true; };
   }, []);
 
-  // === Polling de precios ===
-  useEffect(() => {
-    if (!mounted) return;
-    let timer: any;
-    const POLL_MS = 7000;
+// === Polling de precios (visual cada 7 s) ===
+useEffect(() => {
+  if (!mounted) return;
+  let timer: any;
+  const POLL_MS = 7000;
 
-    async function tick() {
-      try {
-        const res = await fetch("/api/price", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json() as {
-          prices: Record<string, number>;
-          candlesBase?: Record<string, Candle[]>;
-          ts: number;
-        };
-        const now = data.ts || Date.now();
+  async function tick() {
+    try {
+      const res = await fetch("/api/price-tick", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json() as {
+        prices: Record<string, number>;
+        ts: number;
+      };
+      const now = data.ts || Date.now();
 
-        setValues(prev => {
-          const next = { ...prev };
-          for (const id of Object.keys(next)) {
-            const old = next[id];
-            const p = data.prices[id] ?? old.price;
-            const changePct = +(((p - old.price) / Math.max(1e-9, old.price)) * 100).toFixed(2);
-            next[id] = { ...old, price: p, changePct, updatedAt: now };
-          }
-          return next;
-        });
+      setValues(prev => {
+        const next = { ...prev };
+        for (const id of Object.keys(next)) {
+          const old = next[id];
+          const p = data.prices[id] ?? old.price;
+          const changePct = +(((p - old.price) / Math.max(1e-9, old.price)) * 100).toFixed(2);
+          next[id] = { ...old, price: p, changePct, updatedAt: now };
+        }
+        return next;
+      });
 
-if (data.candlesBase) {
-  setHistory((prev) => {
-    const merged: Record<string, Candle[]> = { ...prev };
-    for (const [vid, newArr] of Object.entries(data.candlesBase || {})) {
-      const prevArr = merged[vid] || [];
-
-      // ✅ Mezcla ambas listas y elimina duplicados por 'time'
-      const combined = [...prevArr, ...newArr].reduce<Candle[]>((acc, c) => {
-        if (!acc.find((x) => x.time === c.time)) acc.push(c);
-        return acc;
-      }, []);
-
-      // 🔹 Mantiene las últimas 300 velas
-      merged[vid] = combined.slice(-300);
+    } catch (e) {
+      // no log
     }
-    return merged;
-  });
-}
+  }
 
-      } catch (e) {
-        // no log
-      }
-    }
-
-    tick();
-    timer = setInterval(tick, POLL_MS);
-    return () => clearInterval(timer);
-  }, [mounted]);
+  tick();
+  timer = setInterval(tick, POLL_MS);
+  return () => clearInterval(timer);
+}, [mounted]);
 
 const [top5, setTop5] = useState<{ id:number; user:string; points:number }[]>([]);
 
@@ -285,6 +265,32 @@ useEffect(() => {
   })();
 }, []);
 
+// === Cargar velas al abrir el gráfico (solo la primera vez) ===
+useEffect(() => {
+  async function loadCandles() {
+    if (!chartFor) return; // no hacer nada si no hay gráfico abierto
+    try {
+      const id = chartFor.toLowerCase();
+      const tf = "5m"; // 👈 forzamos timeframe existente
+
+      const res = await fetch(`/api/candles?id=${id}&tf=${tf}`, { cache: "no-store" });
+      const json = await res.json();
+
+      console.log(`🕯️ ${json.candles?.length ?? 0} velas recibidas para ${id} (${tf})`);
+      if (json.candles?.length) {
+        // Insertamos directamente en history
+        setHistory((prev) => ({
+          ...prev,
+          [chartFor]: json.candles,
+        }));
+      }
+    } catch (err) {
+      console.error("❌ Error al cargar velas:", err);
+    }
+  }
+
+  loadCandles();
+}, [chartFor]);
 
 
   // === Resample helper ===

@@ -10,12 +10,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const cookie = cookies().get("session_token");
-    if (!cookie) {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("session_token");
+    if (!token) {
       return NextResponse.json({ user: null }, { status: 200 });
     }
 
-    const decoded = jwt.verify(cookie.value, JWT_SECRET) as {
+    const decoded = jwt.verify(token.value, JWT_SECRET) as {
       id: number;
       name: string;
       role?: string;
@@ -29,3 +30,4 @@ export async function GET() {
     return NextResponse.json({ user: null }, { status: 200 });
   }
 }
+

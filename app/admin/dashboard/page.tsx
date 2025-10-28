@@ -71,6 +71,24 @@ export default function AdminDashboard() {
     })();
   }, [isAdmin]);
 
+  // === Mantener precios y velas actualizados (tick cada 10s) ===
+  useEffect(() => {
+    if (!isAdmin) return; // solo el admin dispara la simulación global
+
+    const tick = setInterval(async () => {
+      try {
+        const res = await fetch("/api/price", { cache: "no-store" });
+        if (!res.ok) throw new Error("No se pudo actualizar precios");
+      } catch (e) {
+        console.error("Error actualizando precios:", e);
+      }
+    }, 10000); // 10s = mismo valor que tickSeconds
+
+    return () => clearInterval(tick);
+  }, [isAdmin]);
+
+
+
   // === Funciones del dashboard ===
   const runDaily = useCallback(async () => {
     setBusy(true);
