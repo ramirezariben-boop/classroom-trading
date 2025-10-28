@@ -30,30 +30,39 @@ export async function GET(req: Request) {
     let updated = 0;
     const errors: string[] = [];
 
-    for (const row of rows) {
-      try {
-        const id = Number(row.id);
-        const name = String(row.name).trim();
-        const nip = String(row.nip).trim();
-        const points = Number(row.points) || 0;
+for (const row of rows) {
+  try {
+    const id = Number(row.id);
+    const name = String(row.name).trim();
+    const nip = String(row.nip).trim();
+    const points = Number(row.points) || 0;
 
-        if (!id || !name || !nip) continue;
+    if (!id || !name || !nip) continue;
 
-        console.log("🟡 Intentando actualizar:", { id, name, points });
+    console.log("🟡 Intentando actualizar:", { id, name, points });
 
-        const result = await prisma.user.upsert({
-          where: { id },
-          update: { name, nip, points }, // ⚡️ ahora sí forzamos actualización
-          create: { id, name, nip, points },
-        });
+    const existing = await prisma.user.findUnique({ where: { id } });
+    console.log("🔍 Usuario existente:", existing ? existing.id : "NO ENCONTRADO");
 
-        console.log("🟢 Resultado Prisma:", result);
-
-        updated++;
-      } catch (err: any) {
-        errors.push(err.message || String(err));
-      }
+    if (existing) {
+      const updatedUser = await prisma.user.update({
+        where: { id },
+        data: { name, nip, points },
+      });
+      console.log("🟢 Actualizado:", updatedUser.id, updatedUser.points);
+      updated++;
+    } else {
+      const createdUser = await prisma.user.create({
+        data: { id, name, nip, points },
+      });
+      console.log("🆕 Creado:", createdUser.id);
+      created++;
     }
+  } catch (err: any) {
+    errors.push(err.message || String(err));
+  }
+}
+
 
     return NextResponse.json({
       ok: true,
