@@ -1,65 +1,53 @@
+import { prisma } from "@/lib/prisma";
 import fs from "fs";
-import path from "path";
-import { parse as parseCSV } from "csv-parse/sync";
-import { prisma } from "@/app/lib/prisma";
+import { parse } from "csv-parse/sync";
 
 async function main() {
-  const filePath = path.join(process.cwd(), "data", "users_utf8.csv");
-  if (!fs.existsSync(filePath)) {
-    console.error("❌ No se encontró el archivo CSV:", filePath);
-    process.exit(1);
-  }
+  const filePath = "data/users_utf8.csv";
+  let csvContent = fs.readFileSync(filePath, "utf8");
+  csvContent = csvContent.replace(/^\uFEFF/, ""); // 💥 elimina el BOM
 
-  const csvText = fs.readFileSync(filePath, "utf8");
-  const rows = parseCSV(csvText, { columns: true, skip_empty_lines: true });
-  console.log(`📄 Leyendo ${rows.length} filas de users_utf8.csv...`);
+  const rows = parse(csvContent, {
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+  });
 
-  let updated = 0;
+  console.log(`📄 Leyendo ${rows.length} filas de ${filePath}...`);
+
   let created = 0;
-  let errors: string[] = [];
+  let updated = 0;
 
   for (const row of rows) {
-    try {
-      const id = Number(row.id);
-      const name = String(row.name).trim();
-      const nip = String(row.nip).trim();
-      const points = Number(row.points) || 0;
-      const day = row.day ? String(row.day).trim() : null;
-      const user = row.user ? String(row.user).trim() : null;
-      const password = row.password ? String(row.password).trim() : "";
+    // Asegura que funcione aunque el encabezado tuviera BOM
+    const id = Number(row.id ?? row["﻿id"]);
+    if (!id || Number.isNaN(id)) continue;
 
-      if (!id || !name || !nip) continue;
+    const data = {
+      name: String(row.name ?? "").trim(),
+      day: String(row.day ?? "").trim(),
+      user: String(row.user ?? "").trim(),
+      nip: String(row.password ?? "").trim(),
+      points: Number(row.points ?? 0),
+    };
 
-      const existing = await prisma.user.findUnique({ where: { id } });
-
-      if (existing) {
-        await prisma.user.update({
-          where: { id },
-          data: { name, nip, points, day, user, password },
-        });
-        updated++;
-      } else {
-        await prisma.user.create({
-          data: { id, name, nip, points, day, user, password },
-        });
-        created++;
-      }
-    } catch (err: any) {
-      console.error("⚠️ Error en fila:", err.message);
-      errors.push(err.message);
+    const existing = await prisma.user.findUnique({ where: { id } });
+    if (existing) {
+      await prisma.user.update({ where: { id }, data });
+      updated++;
+    } else {
+      await prisma.user.create({ data: { id, ...data } });
+      created++;
     }
   }
 
-  console.log(`✅ Sincronización completada`);
+  console.log("✅ Sincronización completada");
   console.log(`   → ${updated} actualizados`);
   console.log(`   → ${created} creados`);
-  if (errors.length) console.log(`   ⚠️ ${errors.length} errores`);
+  process.exit(0);
 }
 
-main()
-  .catch((err) => {
-    console.error("❌ Error general:", err);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main().catch((e) => {
+  console.error("❌ Error:", e);
+  process.exit(1);
+});

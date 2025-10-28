@@ -235,7 +235,7 @@ export async function GET() {
 
   // OU params
   const k = 0.20;                 // fuerza de reversión por tick (0–1)
-  const sigma = VOLATILITY * 0.06;
+  const sigma = VOLATILITY * 0.30;
   const stepCap = 0.02;           // Máx ±2% por tick
 
   for (let s = 0; s < steps; s++) {
