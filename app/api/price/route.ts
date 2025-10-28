@@ -1,28 +1,25 @@
-// app/api/price/route.ts
+// api/price/route.ts
+
 import { NextResponse } from "next/server";
 import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
-// ⬇️ AJUSTA ESTA RUTA a donde esté tu prisma:
 import { prisma } from "@/app/lib/prisma";
-import { saveCandle } from "@/lib/saveCandle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const STEP_PERIOD_MS_DEFAULT = 5000; // cada 5s reales
-const MAX_STEPS_PER_REQUEST = 1;     // evita encadenar pasos en una sola request
-
 // ===== Catálogo base =====
 const DEFAULTS: Record<string, number> = {
   baumxp: 110, dsgmxp: 95, rftmxp: 90,
-  krimxp: 42,  grmmxp: 41,  litmxp: 50,  hormxp: 56,
-  sonmxp: 1.2,   sammxp: 0.99,
-  wgrmxp: 1,   waumxp: 1,   wbtmxp: 1,   wxhmxp: 1,
-  zhnmxp: 12.8,  anlmxp: 1,
+  krimxp: 42, grmmxp: 41, litmxp: 50, hormxp: 56,
+  sonmxp: 1.2, sammxp: 0.99,
+  wgrmxp: 1, waumxp: 1, wbtmxp: 1, wxhmxp: 1,
+  zhnmxp: 12.8, anlmxp: 1,
   gzehntel: 12.8, gkrimi: 42, ggramm: 41, glit: 50, ghor: 55,
 };
 
+// ===== Tipos =====
 type Candle = { time: number; open: number; high: number; low: number; close: number };
 type Signals = {
   groupAvg: number;
@@ -35,7 +32,7 @@ type Signals = {
   volatility?: number;
 };
 
-// ===== Estado en memoria (persiste entre requests/reloads) =====
+// ===== Estado global =====
 type State = {
   lastPrices: Map<string, number>;
   candlesBase: Map<string, Candle[]>;
@@ -46,10 +43,10 @@ type State = {
 };
 
 const state: State = (globalThis as any).__PRICE_STATE__ ?? ((globalThis as any).__PRICE_STATE__ = {
-  lastPrices: new Map<string, number>(),
-  candlesBase: new Map<string, Candle[]>(),
+  lastPrices: new Map(),
+  candlesBase: new Map(),
   lastDayKey: "",
-  lastBaseline: new Map<string, number>(),
+  lastBaseline: new Map(),
   lastFactorsKey: "",
   lastTick: 0,
 });
@@ -72,7 +69,6 @@ async function readJsonSafe<T = any>(...parts: string[]): Promise<T | null> {
   }
 }
 
-// ===== Factors =====
 function loadFactors() {
   try {
     const filePath = path.join(process.cwd(), "data", "factors.json");
@@ -83,7 +79,6 @@ function loadFactors() {
   }
 }
 
-// ===== Signals: data -> public -> endpoint -> defaults =====
 async function loadSignals(): Promise<Signals> {
   const fromData = await readJsonSafe<Partial<Signals>>("data", "signals.json");
   if (fromData) return withSignalDefaults(fromData);
@@ -112,113 +107,155 @@ function withSignalDefaults(s: Partial<Signals>): Signals {
   };
 }
 
-// ===== Baseline diario =====
 function computeDailyBaseline(sig: Signals, factors: any) {
-  const A = 0.35, /*B = 0.45,*/ C = 0.06; // B eliminado (sin efecto workers)
+  const A = 0.35, C = 0.06;
   const R = sig.redemptionsScore ?? 0;
   const Y = sig.youtubeScore ?? 0;
-
   const baseline = new Map<string, number>();
   const mergedBases = { ...DEFAULTS, ...(factors.basePrices || {}) };
 
   for (const [id, base] of Object.entries(mergedBases)) {
     let mu = base * (1 + R + Y);
-
-    // Acciones: SIN influencia de "workers"
-    if (["baumxp", "dsgmxp", "rftmxp"].includes(id)) {
-      // mu = mu;
-    } else if (["krimxp", "grmmxp", "litmxp", "hormxp", "gkrimi", "ggramm", "glit", "ghor"].includes(id)) {
+    if (["krimxp", "grmmxp", "litmxp", "hormxp", "gkrimi", "ggramm", "glit", "ghor"].includes(id)) {
       const d = sig.demand[id] ?? 0;
       mu *= 1 + C * Math.tanh(d / 10);
     } else if (["zhnmxp", "gzehntel"].includes(id)) {
       mu *= 1 + A * ((sig.groupAvg - 75) / 25);
     }
-
     baseline.set(id, mu);
   }
   return baseline;
 }
 
-// ===== Velas (persistencia con Prisma) =====
-function pushBaseCandle(id: string, price: number, now: number, candleMs: number) {
-  const arr = state.candlesBase.get(id) ?? [];
-  const last = arr[arr.length - 1];
-  const openNew = !last || now - last.time >= candleMs;
+// ===== Velas (persistencia multitemporal con Prisma) =====
+function pushBaseCandle(id: string, price: number, now: number, baseCandleMs: number) {
+  const tfs = [
+    { label: "5m", ms: 5 * 60_000 },
+    { label: "15m", ms: 15 * 60_000 },
+    { label: "1h", ms: 60 * 60_000 },
+    { label: "4h", ms: 4 * 60 * 60_000 },
+    { label: "1d", ms: 24 * 60 * 60_000 },
+    { label: "1w", ms: 7 * 24 * 60 * 60_000 },
+  ];
 
-  if (openNew) {
-    const candle = { time: now, open: price, high: price, low: price, close: price };
-    arr.push(candle);
-    state.candlesBase.set(id, arr.slice(-1000));
+  for (const { label, ms } of tfs) {
+    const key = `${id}-${label}`;
+    const arr = state.candlesBase.get(key) ?? [];
+    const last = arr[arr.length - 1];
+    const openNew = !last || now - last.time >= ms;
 
-    // Guarda solo al abrir vela nueva
-    void saveCandle(id, "5m", candle);
-    return;
+    if (openNew) {
+      const candle = { time: now, open: price, high: price, low: price, close: price };
+      arr.push(candle);
+      state.candlesBase.set(key, arr.slice(-1500));
+
+// Guarda vela nueva en Prisma y controla límite de 1500
+void (async () => {
+  // 1️⃣ Contar cuántas velas hay actualmente en la DB
+  const count = await prisma.candle.count({
+    where: { valueId: id, timeframe: label },
+  });
+
+  // 2️⃣ Si ya hay 1500 o más, borra la más antigua
+  if (count >= 1500) {
+    const oldest = await prisma.candle.findFirst({
+      where: { valueId: id, timeframe: label },
+      orderBy: { ts: "asc" },
+      select: { time: true },
+    });
+    if (oldest) {
+      await prisma.candle.deleteMany({
+        where: { valueId: id, timeframe: label, time: oldest.time },
+      });
+      console.log(`🧹 Eliminada vela más antigua de ${id} (${label})`);
+    }
   }
 
+  // 3️⃣ Crear la nueva vela
+  await prisma.candle.create({
+    data: {
+      valueId: id,
+      timeframe: label,
+      ts: new Date(now),
+      time: BigInt(now),
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+    },
+  });
+})();
 
-  // Actualiza vela abierta en memoria
-  if (price > last.high) last.high = price;
-  if (price < last.low)  last.low  = price;
-  last.close = price;
-  state.candlesBase.set(id, arr.slice(-1000));
-  // Actualiza en la base de datos
-  void saveCandle(id, "5m", last);
+      continue;
+    }
+
+    if (price > last.high) last.high = price;
+    if (price < last.low) last.low = price;
+    last.close = price;
+    state.candlesBase.set(key, arr.slice(-1500));
+
+    void prisma.candle.updateMany({
+      where: { valueId: id, timeframe: label, time: BigInt(last.time) },
+      data: { high: last.high, low: last.low, close: last.close },
+    });
+  }
 }
 
-export async function GET() {
+// ===== Handler principal =====
+export async function GET(req: Request) {
   const now = Date.now();
-
   const factors = loadFactors();
   const sig = await loadSignals();
-
-  const VOLATILITY = (factors.volatility ?? sig.volatility ?? 0.05);
-  const stepPeriodMs = (factors.tickSeconds ? factors.tickSeconds * 1000 : STEP_PERIOD_MS_DEFAULT);
+  const VOLATILITY = factors.volatility ?? sig.volatility ?? 0.05;
+  const stepPeriodMs = (factors.tickSeconds ? factors.tickSeconds * 1000 : 5000);
   const candleMs = Math.max(1000, (factors.candleSeconds ? factors.candleSeconds * 1000 : 60_000));
   const dayKey = sig.dayKey ?? new Date().toISOString().slice(0, 10);
 
-  // clave para detectar cambios sin reiniciar
   const fKey = JSON.stringify({
     date: factors.date ?? null,
     vol: VOLATILITY,
     basePrices: factors.basePrices ?? {},
   });
 
-  // Precarga últimas N velas desde DB si el cache está vacío
-  const PRELOAD = 144; // ~24h si candle≈10 min
+  // === Precarga desde Prisma ===
+  const PRELOAD = 1500;
   if (state.candlesBase.size === 0) {
+    console.log(`⏳ Precargando ${PRELOAD} velas/TF desde Prisma...`);
+    const tfs = ["5m", "15m", "1h", "4h", "1d", "1w"];
     for (const id of Object.keys(DEFAULTS)) {
-      try {
-        // ⬇️ TRAE DESC y luego invierte para ascendente
-       const rows = await prisma.candle.findMany({
-  where: { valueId: id },
-  orderBy: { time: "desc" },
-  take: PRELOAD,
-});
-        if (rows.length) {
-          const asc = rows.slice().reverse();
+      for (const tf of tfs) {
+        try {
+          const rows = await prisma.candle.findMany({
+            where: { valueId: id, timeframe: tf },
+            orderBy: { ts: "desc" },
+            take: PRELOAD,
+          });
+          const asc = rows.reverse();
           state.candlesBase.set(
-            id,
-            asc.map(r => ({
-  time: new Date(r.ts).getTime(),
-  open: r.open, high: r.high, low: r.low, close: r.close,
-}))
-
+            `${id}-${tf}`,
+            asc.map((r) => ({
+              time: Number(r.time),
+              open: r.open,
+              high: r.high,
+              low: r.low,
+              close: r.close,
+            }))
           );
-          const last = asc[asc.length - 1];
-          state.lastPrices.set(id, last.close);
+          if (asc.length) state.lastPrices.set(id, asc.at(-1)!.close);
+        } catch (err) {
+          console.warn("Error precargando", id, err);
         }
-      } catch {}
+      }
     }
+    console.log("✅ Precarga completada");
   }
 
-  // Recalcular baseline si cambia día o factors (y resetear reloj)
+  // === Recalcular baseline ===
   if (dayKey !== state.lastDayKey || fKey !== state.lastFactorsKey) {
     state.lastBaseline = computeDailyBaseline(sig, factors);
     state.lastDayKey = dayKey;
     state.lastFactorsKey = fKey;
     state.lastTick = now;
-
-    // Si no hay precios cargados (ni DB ni memoria), sembrar con baseline + guardar una vela
     if (state.lastPrices.size === 0) {
       for (const [id, mu] of state.lastBaseline.entries()) {
         state.lastPrices.set(id, mu);
@@ -227,34 +264,27 @@ export async function GET() {
     }
   }
 
-  // Avanzar ticks SOLO si ya pasó stepPeriodMs
+  // === Avanzar ticks ===
   if (state.lastTick === 0) state.lastTick = now;
   let steps = Math.floor((now - state.lastTick) / stepPeriodMs);
-  if (steps > MAX_STEPS_PER_REQUEST) steps = MAX_STEPS_PER_REQUEST;
+  if (steps > 60) steps = 60;
   if (steps < 0) steps = 0;
 
-  // OU params
-  const k = 0.20;                 // fuerza de reversión por tick (0–1)
+  const k = 0.20;
   const sigma = VOLATILITY * 0.30;
-  const stepCap = 0.02;           // Máx ±2% por tick
+  const stepCap = 0.02;
 
   for (let s = 0; s < steps; s++) {
     const tNow = state.lastTick + (s + 1) * stepPeriodMs;
-
     for (const [id, baseDefault] of Object.entries(DEFAULTS)) {
       const mu = state.lastBaseline.get(id) ?? baseDefault;
       const prev = state.lastPrices.get(id) ?? mu;
-
       const bandLo = prev * (1 - stepCap);
       const bandHi = prev * (1 + stepCap);
-
       const drift = k * (mu - prev);
       const noise = mu * sigma * randn();
       let next = prev + drift + noise;
-
-      if (next < bandLo) next = bandLo;
-      if (next > bandHi) next = bandHi;
-
+      next = Math.min(bandHi, Math.max(bandLo, next));
       next = +(next.toFixed(mu < 2 ? 4 : 2));
       state.lastPrices.set(id, next);
       pushBaseCandle(id, next, tNow, candleMs);
@@ -263,7 +293,6 @@ export async function GET() {
 
   if (steps > 0) state.lastTick += steps * stepPeriodMs;
 
-  // Serializa
   const PRICES: Record<string, number> = {};
   for (const [id, baseDefault] of Object.entries(DEFAULTS)) {
     const mu = state.lastBaseline.get(id) ?? baseDefault;
@@ -271,7 +300,9 @@ export async function GET() {
   }
 
   const candlesBaseObj: Record<string, Candle[]> = {};
-  for (const [id, arr] of state.candlesBase.entries()) candlesBaseObj[id] = arr;
+  for (const [key, arr] of state.candlesBase.entries()) {
+    candlesBaseObj[key] = arr;
+  }
 
   return NextResponse.json(
     { prices: PRICES, candlesBase: candlesBaseObj, ts: now },

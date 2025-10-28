@@ -251,13 +251,20 @@ if (data.candlesBase) {
     const merged: Record<string, Candle[]> = { ...prev };
     for (const [vid, newArr] of Object.entries(data.candlesBase || {})) {
       const prevArr = merged[vid] || [];
-      const lastTime = prevArr.length ? prevArr[prevArr.length - 1].time : 0;
-      const newOnes = newArr.filter((c) => c.time > lastTime);
-      merged[vid] = [...prevArr, ...newOnes].slice(-300);
+
+      // ✅ Mezcla ambas listas y elimina duplicados por 'time'
+      const combined = [...prevArr, ...newArr].reduce<Candle[]>((acc, c) => {
+        if (!acc.find((x) => x.time === c.time)) acc.push(c);
+        return acc;
+      }, []);
+
+      // 🔹 Mantiene las últimas 300 velas
+      merged[vid] = combined.slice(-300);
     }
     return merged;
   });
 }
+
       } catch (e) {
         // no log
       }

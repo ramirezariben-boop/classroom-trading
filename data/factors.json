@@ -2,7 +2,7 @@
   "date": "2025-10-18",
   "volatility": 0.05,
   "tickSeconds": 5,
-  "candleSeconds": 10,
+  "candleSeconds": 60,
   "_borraestocuandoquierasecharaandarestodenuevo_basePrices": {
     "baumxp": 100,
     "dsgmxp": 100,
