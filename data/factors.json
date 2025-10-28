@@ -3,7 +3,7 @@
   "volatility": 0.05,
   "tickSeconds": 5,
   "candleSeconds": 10,
-  "basePrices": {
+  "_borraestocuandoquierasecharaandarestodenuevo_basePrices": {
     "baumxp": 100,
     "dsgmxp": 100,
     "rftmxp": 100,

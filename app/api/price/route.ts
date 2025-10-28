@@ -15,12 +15,12 @@ const MAX_STEPS_PER_REQUEST = 1;     // evita encadenar pasos en una sola reques
 
 // ===== Catálogo base =====
 const DEFAULTS: Record<string, number> = {
-  baumxp: 100, dsgmxp: 100, rftmxp: 100,
-  krimxp: 40,  grmmxp: 40,  litmxp: 50,  hormxp: 55,
-  sonmxp: 1,   sammxp: 1,
+  baumxp: 110, dsgmxp: 95, rftmxp: 90,
+  krimxp: 42,  grmmxp: 41,  litmxp: 50,  hormxp: 56,
+  sonmxp: 1.2,   sammxp: 0.99,
   wgrmxp: 1,   waumxp: 1,   wbtmxp: 1,   wxhmxp: 1,
-  zhnmxp: 12,  anlmxp: 1,
-  gzehntel: 12, gkrimi: 40, ggramm: 40, glit: 50, ghor: 55,
+  zhnmxp: 12.8,  anlmxp: 1,
+  gzehntel: 12.8, gkrimi: 42, ggramm: 41, glit: 50, ghor: 55,
 };
 
 type Candle = { time: number; open: number; high: number; low: number; close: number };
