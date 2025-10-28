@@ -13,16 +13,16 @@ model User {
   day           String?
   user          String?
   password      String     @default("")
-  points        Float        @default(0)
+  points        Float      @default(0)
   nip           String?
   positions     Position[]
   transfersFrom Transfer[] @relation("fromUser")
   transfersTo   Transfer[] @relation("toUser")
-  txs           Tx[] @relation("UserTxs")
+  txs           Tx[]       @relation("UserTxs")
 }
 
 model Value {
-  id          String  @id
+  id          String     @id
   name        String
   categoryId  String?
   description String?
@@ -30,15 +30,15 @@ model Value {
 }
 
 model Tx {
-  id        Int      @id @default(autoincrement())
-  user      User     @relation("UserTxs", fields: [userId], references: [id])
-  userId    Int
-  type      String   // BUY, SELL, TRANSFER_IN, TRANSFER_OUT, etc.
-  valueId   String?
-  qty       Float?
-  deltaPts  Float
-  ts        DateTime @default(now())
-  note      String?  
+  ts       DateTime @default(now())
+  type     String
+  userId   Int
+  valueId  String?
+  qty      Float?
+  deltaPts Float
+  id       Int      @id @default(autoincrement())
+  note     String?
+  user     User     @relation("UserTxs", fields: [userId], references: [id])
 }
 
 model Transfer {
@@ -52,18 +52,17 @@ model Transfer {
 }
 
 model Position {
-  id        Int      @id @default(autoincrement())
-  user      User     @relation(fields: [userId], references: [id])
   userId    Int
   valueId   String
-  value     Value    @relation(fields: [valueId], references: [id]) // 👈 añadida
-  qty       Float
   avgPrice  Float
+  qty       Float
   updatedAt DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  value     Value    @relation(fields: [valueId], references: [id])
 
   @@unique([userId, valueId])
 }
-
 
 model Candle {
   valueId   String
