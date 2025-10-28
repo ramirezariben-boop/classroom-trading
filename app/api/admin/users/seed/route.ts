@@ -30,36 +30,30 @@ export async function GET(req: Request) {
     let updated = 0;
     const errors: string[] = [];
 
-for (const row of rows) {
-  try {
-    const id = Number(row.id);
-    const name = String(row.name).trim();
-    const nip = String(row.nip).trim();
-    const points = Number(row.points) || 0;
+    for (const row of rows) {
+      try {
+        const id = Number(row.id);
+        const name = String(row.name).trim();
+        const nip = String(row.nip).trim();
+        const points = Number(row.points) || 0;
 
-    if (!id || !name || !nip) continue;
+        if (!id || !name || !nip) continue;
 
-    await prisma.user.upsert({
-      where: { id },
-      update: {
-        name,
-        nip,
-        points, // ⚡️ Forzamos actualización de puntos
-      },
-      create: {
-        id,
-        name,
-        nip,
-        points,
-      },
-    });
+        console.log("🟡 Intentando actualizar:", { id, name, points });
 
-    updated++;
-  } catch (err: any) {
-    errors.push(err.message || String(err));
-  }
-}
+        const result = await prisma.user.upsert({
+          where: { id },
+          update: { name, nip, points }, // ⚡️ ahora sí forzamos actualización
+          create: { id, name, nip, points },
+        });
 
+        console.log("🟢 Resultado Prisma:", result);
+
+        updated++;
+      } catch (err: any) {
+        errors.push(err.message || String(err));
+      }
+    }
 
     return NextResponse.json({
       ok: true,
