@@ -25,6 +25,7 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* ==================== Animaciones ==================== */
 @keyframes pulse-slow {
   0%, 100% { opacity: 0.85; transform: scaleY(1); }
   50% { opacity: 1; transform: scaleY(1.05); }
@@ -34,3 +35,127 @@ body {
   animation: pulse-slow 1.6s ease-in-out infinite;
   transform-origin: center bottom;
 }
+
+@keyframes candle-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-candle-blink {
+  animation: candle-blink 1.2s ease-in-out infinite;
+}
+
+/* ==================== Scrollbar del gráfico de velas ==================== */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 8px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: #525252;
+}
+
+/* ==================== Scroll fixes ==================== */
+
+/* Eliminar la barra blanca inferior global */
+html, body {
+  overflow-x: hidden !important;
+}
+
+/* Cuando el modal está montado, bloquear overflow-x global */
+body:has(div[role="dialog"]),
+body:has(.fixed.inset-0),
+body:has(.modal) {
+  overflow-x: clip !important;
+}
+
+/* Oculta scroll horizontal dentro de modales */
+.modal,
+.fixed.inset-0,
+div[role="dialog"],
+div[role="presentation"] {
+  overflow-x: hidden !important;
+  overscroll-behavior-x: none;
+}
+
+.fixed.inset-0 > div,
+[role="dialog"] > div,
+[role="presentation"] > div {
+  overflow-x: hidden !important;
+}
+
+/* Elimina padding/margin inferior que provoque doble barra */
+div[data-radix-scroll-area-viewport],
+div[class*="overflow-x-scroll"],
+div[class*="overflow-x-auto"] > div:has(svg),
+div:has(> svg) {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.fixed.inset-0 {
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Asegura que el SVG no fuerce desbordamiento extra */
+.fixed.inset-0 svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* Elimina el scroll horizontal de modales con fondos específicos */
+div.fixed.inset-0.bg-neutral-950,
+div.fixed.inset-0.bg-neutral-900,
+div.fixed.inset-0.bg-neutral-900\/90,
+div.fixed.inset-0.bg-neutral-950\/70 {
+  overflow-x: hidden !important;
+  overscroll-behavior-x: none !important;
+}
+
+div.fixed.inset-0.bg-neutral-950 *,
+div.fixed.inset-0.bg-neutral-900 *,
+div.fixed.inset-0.bg-neutral-900\/90 *,
+div.fixed.inset-0.bg-neutral-950\/70 * {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* ========================================================= */
+/* 🔧 FIX FINAL: permitir scroll vertical dentro del gráfico */
+/* ========================================================= */
+
+div.candle-scroll-container {
+  overflow: auto !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  max-height: 100% !important;
+}
+
+/* Scrollbar vertical personalizada del gráfico */
+div.candle-scroll-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+div.candle-scroll-container::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 4px;
+}
+
+div.candle-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #525252;
+}
+
+div.candle-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+

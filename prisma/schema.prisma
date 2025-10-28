@@ -26,6 +26,7 @@ model Value {
   name        String
   categoryId  String?
   description String?
+  positions   Position[]
 }
 
 model Tx {
@@ -55,12 +56,14 @@ model Position {
   user      User     @relation(fields: [userId], references: [id])
   userId    Int
   valueId   String
+  value     Value    @relation(fields: [valueId], references: [id]) // 👈 añadida
   qty       Float
   avgPrice  Float
   updatedAt DateTime @updatedAt
 
   @@unique([userId, valueId])
 }
+
 
 model Candle {
   valueId   String

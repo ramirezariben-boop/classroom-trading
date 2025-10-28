@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import CandleChart from "../components/CandleChart";
 import Link from "next/link";
+import Faktoren from "@/components/Faktoren";
 
 // ==== Tipos ====
 export type Category = { id: string; name: string; description: string };
@@ -116,7 +117,9 @@ export default function Page() {
   const [txScope, setTxScope] = useState<"me" | "all">("me");
   const [user, setUser] = useState<ApiUser | null>(null);
   const [points, setPoints] = useState<number>(0);
-  const [positions, setPositions] = useState<Record<string, { qty: number; avgPrice: number }>>({});
+  const [positions, setPositions] = useState<
+  Record<string, { qty: number; avgPrice: number; categoryId?: string; description?: string }>
+>({});
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginId, setLoginId] = useState("");
   const [loginCode, setLoginCode] = useState("");
@@ -124,6 +127,34 @@ export default function Page() {
   const [transferAmount, setTransferAmount] = useState<number>(0);
   const [transferConcept, setTransferConcept] = useState("");
   const [factors, setFactors] = useState<{ views24hPct?: number; coeff?: Record<string, number>; note?: string; updatedAt?: string } | null>(null);
+
+// 🔒 Bloquear scroll del fondo cuando hay modales abiertos
+useEffect(() => {
+  const html = document.documentElement;
+  const body = document.body;
+
+  if (chartFor || loginOpen) {
+    const originalHtmlOverflow = html.style.overflow;
+    const originalBodyOverflow = body.style.overflow;
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+
+    // También bloquea el desplazamiento táctil (para móviles)
+    const preventScroll = (e: WheelEvent | TouchEvent) => e.preventDefault();
+    window.addEventListener("wheel", preventScroll, { passive: false });
+    window.addEventListener("touchmove", preventScroll, { passive: false });
+
+    return () => {
+      html.style.overflow = originalHtmlOverflow;
+      body.style.overflow = originalBodyOverflow;
+      window.removeEventListener("wheel", preventScroll);
+      window.removeEventListener("touchmove", preventScroll);
+    };
+  }
+}, [chartFor, loginOpen]);
+
+
 
   useEffect(() => setMounted(true), []);
 
@@ -215,18 +246,18 @@ export default function Page() {
           return next;
         });
 
-        if (data.candlesBase) {
-          setHistory(prev => {
-            const merged: Record<string, Candle[]> = { ...prev };
-            for (const [vid, newArr] of Object.entries(data.candlesBase)) {
-              const prevArr = merged[vid] || [];
-              const lastTime = prevArr.length ? prevArr[prevArr.length - 1].time : 0;
-              const newOnes = newArr.filter(c => c.time > lastTime);
-              merged[vid] = [...prevArr, ...newOnes].slice(-300);
-            }
-            return merged;
-          });
-        }
+if (data.candlesBase) {
+  setHistory((prev) => {
+    const merged: Record<string, Candle[]> = { ...prev };
+    for (const [vid, newArr] of Object.entries(data.candlesBase || {})) {
+      const prevArr = merged[vid] || [];
+      const lastTime = prevArr.length ? prevArr[prevArr.length - 1].time : 0;
+      const newOnes = newArr.filter((c) => c.time > lastTime);
+      merged[vid] = [...prevArr, ...newOnes].slice(-300);
+    }
+    return merged;
+  });
+}
       } catch (e) {
         // no log
       }
@@ -245,129 +276,6 @@ useEffect(() => {
     const data = await res.json();
     setTop5(data.top5);
   })();
-}, []);
-
-useEffect(() => {
-  let timer: any;
-
-  async function loadDailyData() {
-    try {
-      const res = await fetch("/api/daily", { cache: "no-store" });
-      if (!res.ok) throw new Error("Error cargando métricas");
-      const data = await res.json();
-
-      const summary = `
-        <div>🎥 Canal: ${(data.canal_ratio * 100).toFixed(2)}% likes/vistas</div>
-        <div>📚 Sábado · Part: ${data.sabado.participacion ?? "-"} · Asist: ${data.sabado.asistencia ?? "-"}%</div>
-        <div>📚 Domingo · Part: ${data.domingo.participacion ?? "-"} · Asist: ${data.domingo.asistencia ?? "-"}%</div>
-      `;
-      const div = document.getElementById("dailySummary");
-      if (div) div.innerHTML = summary;
-
-      // ==== Actualiza la línea "Última actualización" ====
-      const lastUpdated = new Date(data.date).toLocaleDateString("es-MX", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      });
-      const nextUpdate = calcNextMondayAt18();
-const nextText = new Date(nextUpdate).toLocaleString("es-MX", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-
-      const infoDiv = document.getElementById("dailyInfo");
-      if (infoDiv) {
-        infoDiv.innerHTML = `
-          <div class="text-[11px] text-neutral-500 mt-1">
-            Última actualización: ${lastUpdated} · Próxima: ${nextText}
-          </div>
-        `;
-      }
-
-      // ==== Gráfico ====
-      const { default: Chart } = await import("chart.js/auto");
-      const ctx = document.getElementById("dailyLineChart") as HTMLCanvasElement;
-      if (!ctx) return;
-
-      new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: ["Participación", "Evaluaciones", "Tareas extra", "Asistencia"],
-          datasets: [
-            {
-              label: "Sábado",
-              borderColor: "#3b82f6",
-              backgroundColor: "#3b82f6",
-              fill: false,
-              tension: 0.3,
-              data: [
-                data.sabado.participacion,
-                data.sabado.evaluaciones,
-                data.sabado.tareas_extra,
-                data.sabado.asistencia,
-              ],
-            },
-            {
-              label: "Domingo",
-              borderColor: "#f59e0b",
-              backgroundColor: "#f59e0b",
-              fill: false,
-              tension: 0.3,
-              data: [
-                data.domingo.participacion,
-                data.domingo.evaluaciones,
-                data.domingo.tareas_extra,
-                data.domingo.asistencia,
-              ],
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          plugins: { legend: { position: "bottom", labels: { color: "#ddd" } } },
-          scales: {
-            x: { ticks: { color: "#aaa" } },
-            y: { ticks: { color: "#aaa" }, beginAtZero: true },
-          },
-        },
-      });
-    } catch (err) {
-      console.error("Error cargando daily:", err);
-      const div = document.getElementById("dailySummary");
-      if (div) div.textContent = "No se pudieron cargar los datos.";
-    }
-  }
-
-  function calcNextMondayAt18() {
-    const now = new Date();
-    const next = new Date(now);
-    const day = now.getDay(); // 0=Dom, 1=Lun, ...
-    const daysToMonday = (1 - day + 7) % 7 || 7;
-    next.setDate(now.getDate() + daysToMonday);
-    next.setHours(18, 0, 0, 0);
-    return next.getTime();
-  }
-
-  function scheduleNextUpdate() {
-    const delay = calcNextMondayAt18() - Date.now();
-    console.log(`⏳ Próxima actualización de /api/daily: ${new Date(Date.now() + delay).toLocaleString("es-MX")}`);
-
-    timer = setTimeout(() => {
-      loadDailyData();
-      scheduleNextUpdate();
-    }, delay);
-  }
-
-  loadDailyData();      // Carga inicial
-  scheduleNextUpdate(); // Programa el refresco semanal
-
-  return () => clearTimeout(timer);
 }, []);
 
 
@@ -447,33 +355,57 @@ const nextText = new Date(nextUpdate).toLocaleString("es-MX", {
   }
 
   // === Portafolio ===
-  async function refreshPortfolio() {
-    try {
-      const data = await api<{
-        points: number;
-        positions: { valueId: string; qty: number; avgPrice: number }[];
-        txs: any[];
-      }>("/api/portfolio");
+async function refreshPortfolio() {
+  try {
+    const data = await api<{
+      points: number;
+      positions: {
+        valueId: string;
+        qty: number;
+        avgPrice: number;
+        categoryId?: string;
+        description?: string;
+      }[];
+      txs: any[];
+    }>("/api/portfolio");
 
-      setPoints(Number(data.points));
-      const newPositions: Record<string, { qty: number; avgPrice: number }> = {};
-      for (const p of data.positions) newPositions[p.valueId] = { qty: p.qty, avgPrice: p.avgPrice };
-      setPositions(newPositions);
+    setPoints(Number(data.points));
 
-      const mapped = data.txs.map((t) => ({
-        id: t.id,
-        ts: new Date(t.ts).getTime(),
-        type: t.type,
-        valueId: t.valueId,
-        qty: t.qty,
-        deltaPoints: Number(t.deltaPts),
-        note: t.note,
-      }));
-      if (txScope === "me") setTxs(mapped);
-    } catch (e) {
-      console.error("Error cargando portafolio", e);
+    // 🔹 Conservamos toda la información, no solo qty y avgPrice
+    const newPositions: Record<
+      string,
+      { qty: number; avgPrice: number; categoryId?: string; description?: string }
+    > = {};
+
+    for (const p of data.positions) {
+      newPositions[p.valueId] = {
+        qty: p.qty,
+        avgPrice: p.avgPrice,
+        categoryId: p.categoryId,
+        description: p.description,
+      };
     }
+
+    setPositions(newPositions);
+
+    const mapped = data.txs.map((t) => ({
+      id: t.id,
+      ts: new Date(t.ts).getTime(),
+      type: t.type,
+      valueId: t.valueId,
+      qty: t.qty,
+      deltaPoints: Number(t.deltaPts),
+      note: t.note,
+    }));
+
+    if (txScope === "me") setTxs(mapped);
+
+    console.log("🧾 Portafolio actualizado:", newPositions);
+  } catch (e) {
+    console.error("Error cargando portafolio", e);
   }
+}
+
 
   async function fetchTxs(scope: "me" | "all") {
     const res = await fetch(`/api/txs?scope=${scope}`);
@@ -523,9 +455,12 @@ async function placeOrder(mode: "BUY" | "SELL", valueId: string, qty: number) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Error al procesar la operación.");
 
-    // Refrescar portafolio y transacciones
-    await refreshPortfolio();
-    setTrade(null);
+// Refrescar portafolio y transacciones SIEMPRE
+await refreshPortfolio();
+const updated = await fetchTxs("me");
+setTxs(updated);
+setTrade(null);
+
   } catch (e: any) {
     alert(e.message || "Error al procesar la operación");
   }
@@ -803,54 +738,94 @@ async function placeOrder(mode: "BUY" | "SELL", valueId: string, qty: number) {
             );
           })}
 
-          {/* ==== Mis bienes ==== */}
-          {user && (
-            <div className="bg-neutral-900 rounded-2xl p-5 border border-neutral-800 mt-8">
-              <h2 className="text-lg font-semibold mb-3">📦 Mis bienes adquiridos</h2>
-              {Object.entries(positions)
-                .filter(([id, pos]) => pos.qty > 0 && values[id]?.categoryId === "guter").length === 0 ? (
-                <p className="text-neutral-500 text-sm">Aún no has comprado bienes.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse">
-                    <thead>
-                      <tr className="border-b border-neutral-700 text-neutral-400">
-                        <th className="text-left py-2">Bien</th>
-                        <th className="text-right py-2">Cantidad</th>
-                        <th className="text-right py-2">Precio promedio</th>
-                        <th className="text-right py-2">Valor actual</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(positions)
-                        .filter(([id, pos]) => pos.qty > 0 && values[id]?.categoryId === "guter")
-                        .map(([id, pos]) => {
-                          const v = values[id];
-                          const total = pos.qty * v.price;
-                          return (
-                            <tr key={id} className="border-b border-neutral-800 hover:bg-neutral-800/50">
-                              <td className="py-2">{v.name}</td>
-                              <td className="py-2 text-right">{pos.qty}</td>
-                              <td className="py-2 text-right">{fmt.format(pos.avgPrice)} MXP</td>
-                              <td className="py-2 text-right">{fmt.format(total)} MXP</td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+{/* ==== Mis bienes ==== */}
+{user && (
+  <div className="bg-neutral-900 rounded-2xl p-5 border border-neutral-800 mt-8">
+    <h2 className="text-lg font-semibold mb-3">📦 Mis bienes adquiridos</h2>
 
-          {/* Link a Güter */}
-          <Link
-            href="/guter"
-            className="inline-block mt-6 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition"
-          >
-            📚 Sieh die verfügbaren Güter
-          </Link>
-        </section>
+    {(() => {
+      const bienes = Object.entries(positions).filter(([id, pos]) => {
+        const val = values[id] || {};
+        return (
+          pos.qty > 0 &&
+          (val.categoryId?.toLowerCase?.() === "guter" ||
+            pos.categoryId?.toLowerCase?.() === "guter")
+        );
+      });
+
+      if (bienes.length === 0) {
+        return (
+          <p className="text-sm text-neutral-400">
+            Aún no has comprado bienes.
+          </p>
+        );
+      }
+
+      const totalBienes = bienes.reduce(
+        (acc, [id, pos]) => acc + pos.qty * (values[id]?.price ?? 0),
+        0
+      );
+
+      return (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-neutral-700 text-neutral-400">
+                <th className="text-left py-2">Bien</th>
+                <th className="text-left py-2">Descripción</th>
+                <th className="text-right py-2">Cantidad</th>
+                <th className="text-right py-2">Precio promedio</th>
+                <th className="text-right py-2">Valor actual</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bienes.map(([id, pos]) => {
+                const v = values[id] || {};
+                const priceNow = v.price ?? 0;
+                const total = pos.qty * priceNow;
+                return (
+                  <tr
+                    key={id}
+                    className="border-b border-neutral-800 hover:bg-neutral-800/50"
+                  >
+                    <td className="py-2">{v.name ?? id}</td>
+                    <td className="py-2 text-neutral-400">
+                      {pos.description ?? v.description ?? "—"}
+                    </td>
+                    <td className="py-2 text-right">{pos.qty}</td>
+                    <td className="py-2 text-right">
+                      {fmt.format(pos.avgPrice)} MXP
+                    </td>
+                    <td className="py-2 text-right">{fmt.format(total)} MXP</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-neutral-700 font-semibold">
+                <td colSpan={4} className="py-2 text-right text-neutral-300">
+                  Total bienes:
+                </td>
+                <td className="py-2 text-right">
+                  {fmt.format(totalBienes)} MXP
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      );
+    })()}
+
+    <Link
+      href="/guter"
+      className="inline-block mt-6 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition"
+    >
+      📚 Sieh die verfügbaren Güter
+    </Link>
+  </div>
+)} {/* cierre del condicional {user && (...)} */}
+</section>
+
 
         {/* ==== Sidebar derecho ==== */}
         <aside className="space-y-4">
@@ -1021,7 +996,7 @@ async function placeOrder(mode: "BUY" | "SELL", valueId: string, qty: number) {
 
 {/* ==== Top 5 Usuarios ==== */}
 <div className="bg-neutral-900 rounded-2xl p-4 border border-neutral-800">
-  <h3 className="font-semibold mb-2">🏆 Top 5 usuarios</h3>
+  <h3 className="font-semibold mb-2">🏆 Top 5 Studenten</h3>
   <div className="space-y-1">
     {top5.map((u, i) => (
       <div key={u.id} className="flex justify-between text-sm border-b border-neutral-800 py-1">
@@ -1032,18 +1007,14 @@ async function placeOrder(mode: "BUY" | "SELL", valueId: string, qty: number) {
   </div>
 </div>
 
-{/* ==== Métricas semanales ==== */}
-<div className="bg-neutral-900 rounded-2xl p-4 border border-neutral-800">
-  <h3 className="font-semibold mb-2">📊 Factores semanales</h3>
-  <div id="dailySummary" className="text-xs text-neutral-400 mb-2">
-    Cargando datos...
-  </div>
-  <canvas id="dailyLineChart" className="w-full h-40"></canvas>
-<div id="dailyInfo" className="text-[11px] text-neutral-500 mt-2 text-right"></div>
-</div> 
 
-        </aside>
-      </main>
+{/* ==== Métricas semanales ==== */}
+<Faktoren />
+
+
+</aside>
+</main>
+
 
 
       {/* ==== Modal de Gráfico ==== */}

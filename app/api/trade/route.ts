@@ -1,4 +1,3 @@
-// app/api/trade/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import jwt from "jsonwebtoken";
@@ -11,7 +10,8 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    const cookie = cookies().get("session_token");
+    const cookieStore = await cookies();
+    const cookie = cookieStore.get("session_token");
     if (!cookie)
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
@@ -21,7 +21,6 @@ export async function POST(req: Request) {
     };
 
     const { mode, valueId, qty, price } = await req.json();
-
     if (!mode || !valueId || !qty || !price)
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
 
@@ -32,10 +31,14 @@ export async function POST(req: Request) {
         { status: 404 }
       );
 
-    // ✅ Recuperamos la categoría del valor
-    const value = await prisma.value.findUnique({
-      where: { id: valueId },
-      select: { categoryId: true },
+    const value = await prisma.value.findFirst({
+      where: {
+        OR: [
+          { id: { equals: valueId, mode: "insensitive" } },
+          { name: { equals: valueId, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true, categoryId: true },
     });
 
     if (!value)
@@ -57,7 +60,7 @@ export async function POST(req: Request) {
     const total = +(cantidad * precio).toFixed(2);
     const ts = new Date();
 
-    // ✅ Validar puntos suficientes ANTES de cualquier operación (solo en compras)
+    // ✅ Validar puntos suficientes (solo en compras)
     if (mode === "BUY" && user.points < total) {
       return NextResponse.json(
         { error: "Fondos insuficientes" },
@@ -76,19 +79,24 @@ export async function POST(req: Request) {
           data: {
             userId: user.id,
             type: "BUY",
-            valueId,
+            valueId: value.id,
             qty: cantidad,
             deltaPts: -total,
             ts,
           },
         }),
         prisma.position.upsert({
-          where: { userId_valueId: { userId: user.id, valueId } },
+          where: { userId_valueId: { userId: user.id, valueId: value.id } },
           update: {
             qty: { increment: cantidad },
-            avgPrice: precio, // simplificado
+            avgPrice: precio,
           },
-          create: { userId: user.id, valueId, qty: cantidad, avgPrice: precio },
+          create: {
+            userId: user.id,
+            valueId: value.id,
+            qty: cantidad,
+            avgPrice: precio,
+          },
         }),
       ]);
 
@@ -100,17 +108,21 @@ export async function POST(req: Request) {
       await prisma.$transaction([
         prisma.user.update({
           where: { id: user.id },
-          data: { points: { decrement: total } },
+          data: { points: { increment: total } },
         }),
         prisma.tx.create({
           data: {
             userId: user.id,
             type: "SELL",
-            valueId,
+            valueId: value.id,
             qty: cantidad,
-            deltaPts: -total, // 🔻 siempre negativo
+            deltaPts: total,
             ts,
           },
+        }),
+        prisma.position.updateMany({
+          where: { userId: user.id, valueId: value.id },
+          data: { qty: { decrement: cantidad } },
         }),
       ]);
 
