@@ -4,6 +4,7 @@ import path from "path";
 import { parse as parseCSV } from "csv-parse/sync";
 import { prisma } from "@/app/lib/prisma";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
