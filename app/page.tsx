@@ -273,7 +273,7 @@ useEffect(() => {
       const id = chartFor.toLowerCase();
       const tf = "5m"; // 👈 forzamos timeframe existente
 
-      const res = await fetch(`/api/candles?id=${id}&tf=${tf}`, { cache: "no-store" });
+      const res = await fetch(`/api/candles?id=${id}&tf=${tf}&limit=1500`, { cache: "no-store" });
       const json = await res.json();
 
       console.log(`🕯️ ${json.candles?.length ?? 0} velas recibidas para ${id} (${tf})`);
@@ -308,7 +308,10 @@ useEffect(() => {
         b.close = c.close;
       }
     }
-    return Array.from(buckets.values()).sort((a, b) => a.time - b.time).slice(-300);
+    return Array.from(buckets.values())
+  .sort((a, b) => a.time - b.time)
+  .filter((c) => !Number.isNaN(c.open) && c.open > 0)
+  .slice(-1500);
   }
 
   // === API helper ===

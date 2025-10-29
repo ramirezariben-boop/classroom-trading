@@ -26,14 +26,20 @@ export async function GET(req: Request) {
     });
 
     const candles = rows
-      .reverse()
       .map((r) => ({
         time: Number(r.time),
         open: r.open,
         high: r.high,
         low: r.low,
         close: r.close,
-      }));
+      }))
+
+  // 🔹 Asegura que no haya valores corruptos
+  .filter((c) => !Number.isNaN(c.open) && c.open > 0)
+  // 🔹 Ordena cronológicamente ascendente (de la más vieja a la más nueva)
+  .sort((a, b) => a.time - b.time)
+  // 🔹 Limita a las 1500 más recientes (siempre)
+  .slice(-1500);
 
     return NextResponse.json(
       { ok: true, id, tf, count: candles.length, candles },

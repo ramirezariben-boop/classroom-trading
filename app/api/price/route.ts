@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
-import { prisma } from "@/app/lib/prisma";
+import { safePrisma } from "@/app/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -141,53 +141,74 @@ const TIMEFRAMES = [
   { label: "1w", ms: 7 * 24 * 60 * 60_000 },
 ];
 
-// ===== Gestión de velas activas =====
+// ===== Gestión de velas activas (blindada contra desconexiones) =====
 async function updateActiveCandle(id: string, price: number, now: number) {
   for (const { label, ms } of TIMEFRAMES) {
     const key = `${id}-${label}`;
     let active = state.activeCandles.get(key);
 
+    // Crear una vela inicial si no existe
     if (!active) {
       active = { open: price, high: price, low: price, close: price, startedAt: now };
       state.activeCandles.set(key, active);
       continue;
     }
 
+    // Actualizar valores high/low/close
     active.close = price;
     if (price > active.high) active.high = price;
     if (price < active.low) active.low = price;
 
+    // Cuando se cumple la duración del timeframe (por ejemplo, 5m)
     if (now - active.startedAt >= ms) {
       const candle = { ...active };
 
-      const count = await prisma.candle.count({ where: { valueId: id, timeframe: label } });
-      if (count >= 1500) {
-        const oldest = await prisma.candle.findFirst({
-          where: { valueId: id, timeframe: label },
-          orderBy: { ts: "asc" },
-          select: { time: true },
-        });
-        if (oldest)
-          await prisma.candle.deleteMany({
-            where: { valueId: id, timeframe: label, time: oldest.time },
-          });
+      try {
+        // ==== Control de límite (1500 velas por timeframe) ====
+        const count = await safePrisma(() =>
+          prisma.candle.count({ where: { valueId: id, timeframe: label } })
+        );
+
+        if (count >= 1500) {
+          const oldest = await safePrisma(() =>
+            prisma.candle.findFirst({
+              where: { valueId: id, timeframe: label },
+              orderBy: { ts: "asc" },
+              select: { time: true },
+            })
+          );
+
+          if (oldest) {
+            await safePrisma(() =>
+              prisma.candle.deleteMany({
+                where: { valueId: id, timeframe: label, time: oldest.time },
+              })
+            );
+          }
+        }
+
+        // ==== Crear la nueva vela ====
+        await safePrisma(() =>
+          prisma.candle.create({
+            data: {
+              valueId: id,
+              timeframe: label,
+              ts: new Date(candle.startedAt),
+              time: BigInt(candle.startedAt),
+              open: candle.open,
+              high: candle.high,
+              low: candle.low,
+              close: candle.close,
+            },
+          })
+        );
+
+        console.log(`💾 Vela cerrada ${id} (${label}) ${new Date(candle.startedAt).toLocaleString()}`);
+      } catch (err) {
+        console.error(`⚠️ Error guardando vela ${id} (${label}):`, err);
       }
 
-      await prisma.candle.create({
-        data: {
-          valueId: id,
-          timeframe: label,
-          ts: new Date(candle.startedAt),
-          time: BigInt(candle.startedAt),
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
-        },
-      });
-
-      console.log(`💾 Vela cerrada ${id} (${label}) ${new Date(candle.startedAt).toLocaleString()}`);
-
+      // Reiniciar la vela activa
       state.activeCandles.set(key, {
         open: price,
         high: price,
@@ -198,6 +219,26 @@ async function updateActiveCandle(id: string, price: number, now: number) {
     }
   }
 }
+
+
+// ===== Loop automático para generar ticks incluso sin tráfico =====
+if (!(globalThis as any).__PRICE_LOOP__) {
+  (globalThis as any).__PRICE_LOOP__ = true;
+  const TICK_INTERVAL = 7000; // 7 s por defecto (se puede ajustar)
+  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+
+  (async function loop() {
+    while (true) {
+      try {
+        await fetch(`${BASE_URL}/api/price?key=${process.env.CRON_SECRET || "dev"}`).catch(() => {});
+      } catch (err) {
+        console.error("⛔ Loop interno de price falló:", err);
+      }
+      await new Promise((r) => setTimeout(r, TICK_INTERVAL));
+    }
+  })();
+}
+
 
 // ===== Handler principal =====
 export async function GET(req: Request) {

@@ -41,12 +41,13 @@ export default function CandleChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [lastX, setLastX] = useState(0);
-  const [zoomLevel, setZoomLevel] = useState(0); // -2 a +2 (5 niveles)
+  const [zoomLevel, setZoomLevel] = useState(0); // -2 a +2
   const [cross, setCross] = useState<{ x: number; y: number; visible: boolean }>({
     x: 0,
     y: 0,
     visible: false,
   });
+  const [autoScrolled, setAutoScrolled] = useState(false);
 
   if (!candles || candles.length === 0)
     return <div className="text-xs text-neutral-400">Sin datos…</div>;
@@ -58,10 +59,13 @@ export default function CandleChart({
   const marginBottom = 22;
   const chartH = height - marginTop - marginBottom;
 
-  // ==================== ZOOM: cantidad de velas visibles ====================
-  const candlesPerViewMap = [4, 8, 16, 32, 64];
-  const candlesPerView = candlesPerViewMap[zoomLevel + 2];
-  const visibleCandles = candles.slice(-candlesPerView); // últimas N velas
+  // ==================== ZOOM DINÁMICO ====================
+  const zoomMap = [4, 8, 16, 32, 64];
+  const zoomFactor = zoomMap[zoomLevel + 2];
+  const xStep = Math.max(width / zoomFactor, 1);
+
+  // Mostramos TODAS las velas disponibles
+  const visibleCandles = candles;
 
   // ==================== DATOS DE PRECIO ====================
   const lows = visibleCandles.map((c) => c.low);
@@ -71,9 +75,7 @@ export default function CandleChart({
   const denom = dataMax - dataMin || 1;
 
   // ==================== ESCALAS ====================
-  const xStep = width / candlesPerView;
   const svgWidth = marginLeft + visibleCandles.length * xStep + marginRight;
-
   const x = (i: number) => marginLeft + i * xStep;
   const y = (v: number) => marginTop + (dataMax - v) * (chartH / denom);
 
@@ -109,7 +111,6 @@ export default function CandleChart({
     const rect = svgRef.current.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
-
     const inChart =
       mx >= marginLeft &&
       mx <= svgWidth - marginRight &&
@@ -131,31 +132,14 @@ export default function CandleChart({
     else setZoomLevel((prev) => Math.max(-2, prev - 1));
   };
 
-  // ==================== AUTO-SCROLL A LA DERECHA ====================
+  // ==================== AUTO-SCROLL AL FINAL (una sola vez) ====================
   useLayoutEffect(() => {
+    if (autoScrolled) return;
     const container = containerRef.current;
     if (!container) return;
-    let tries = 0;
-    const maxTries = 25;
-    const scrollToRight = () => {
-      const total = container.scrollWidth;
-      const visible = container.clientWidth;
-      const desired = total - visible;
-      if (total > 0 && desired > 0) {
-        container.scrollLeft = desired;
-        return true;
-      }
-      return false;
-    };
-    const ensureScrollRight = () => {
-      if (scrollToRight()) return;
-      tries++;
-      if (tries < maxTries) requestAnimationFrame(ensureScrollRight);
-    };
-    requestAnimationFrame(() => requestAnimationFrame(ensureScrollRight));
-    const fixLater = setTimeout(ensureScrollRight, 300);
-    return () => clearTimeout(fixLater);
-  }, [visibleCandles.length, zoomLevel]);
+    container.scrollLeft = container.scrollWidth;
+    setAutoScrolled(true);
+  }, [candles.length]);
 
   // ==================== RENDER ====================
   return (
@@ -181,8 +165,20 @@ export default function CandleChart({
         className="bg-transparent"
       >
         {/* Ejes */}
-        <line x1={marginLeft} x2={marginLeft} y1={marginTop} y2={marginTop + chartH} stroke="#2a2a2a" />
-        <line x1={marginLeft} x2={svgWidth - marginRight} y1={marginTop + chartH} y2={marginTop + chartH} stroke="#2a2a2a" />
+        <line
+          x1={marginLeft}
+          x2={marginLeft}
+          y1={marginTop}
+          y2={marginTop + chartH}
+          stroke="#2a2a2a"
+        />
+        <line
+          x1={marginLeft}
+          x2={svgWidth - marginRight}
+          y1={marginTop + chartH}
+          y2={marginTop + chartH}
+          stroke="#2a2a2a"
+        />
 
         {/* Líneas horizontales */}
         {Array.from({ length: yTicks + 1 }).map((_, i) => {
@@ -191,14 +187,20 @@ export default function CandleChart({
           return (
             <g key={`yt-${i}`}>
               <line x1={marginLeft} x2={svgWidth - marginRight} y1={yy} y2={yy} stroke="#262626" />
-              <text x={marginLeft - 6} y={yy + 3} fontSize={10} textAnchor="end" fill="#9ca3af">
+              <text
+                x={marginLeft - 6}
+                y={yy + 3}
+                fontSize={10}
+                textAnchor="end"
+                fill="#9ca3af"
+              >
                 {fmtPrice.format(v)}
               </text>
             </g>
           );
         })}
 
-        {/* Velas visibles */}
+        {/* Velas */}
         {visibleCandles.map((c, i) => {
           const cx = x(i);
           const o = y(c.open);
@@ -215,7 +217,14 @@ export default function CandleChart({
           return (
             <g key={c.time} className={isLast ? "animate-candle-blink" : ""}>
               <line x1={cx} x2={cx} y1={h} y2={l} stroke={color} strokeWidth={1} />
-              <rect x={cx - bodyW / 2} y={bodyTop} width={bodyW} height={bodyH} fill={color} opacity={isLast ? 0.85 : 1} />
+              <rect
+                x={cx - bodyW / 2}
+                y={bodyTop}
+                width={bodyW}
+                height={bodyH}
+                fill={color}
+                opacity={isLast ? 0.85 : 1}
+              />
             </g>
           );
         })}
@@ -232,8 +241,20 @@ export default function CandleChart({
               strokeWidth={1}
               strokeDasharray="2,2"
             />
-            <rect x={0} y={y(nearestCandle.close) - 8} width={marginLeft - 4} height={16} fill="#1a1a1a" />
-            <text x={marginLeft - 8} y={y(nearestCandle.close) + 4} fontSize={10} textAnchor="end" fill="#fff">
+            <rect
+              x={0}
+              y={y(nearestCandle.close) - 8}
+              width={marginLeft - 4}
+              height={16}
+              fill="#1a1a1a"
+            />
+            <text
+              x={marginLeft - 8}
+              y={y(nearestCandle.close) + 4}
+              fontSize={10}
+              textAnchor="end"
+              fill="#fff"
+            >
               {fmtPrice.format(nearestCandle.close)}
             </text>
             <rect
@@ -244,7 +265,13 @@ export default function CandleChart({
               fill="#1a1a1a"
               rx={3}
             />
-            <text x={x(nearestIndex)} y={height - marginBottom + 15} fontSize={10} textAnchor="middle" fill="#fff">
+            <text
+              x={x(nearestIndex)}
+              y={height - marginBottom + 15}
+              fontSize={10}
+              textAnchor="middle"
+              fill="#fff"
+            >
               {fmtTime.format(new Date(nearestCandle.time))}
             </text>
           </>
