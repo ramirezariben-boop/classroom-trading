@@ -133,7 +133,7 @@ function computeDailyBaseline(sig: Signals, factors: any) {
 
 // ===== Temporalidades =====
 const TIMEFRAMES = [
-  { label: "5m", ms: 10_000 },
+  { label: "5m", ms: 5 * 60_000 },
   { label: "15m", ms: 15 * 60_000 },
   { label: "1h", ms: 60 * 60_000 },
   { label: "4h", ms: 4 * 60 * 60_000 },
@@ -180,18 +180,31 @@ async function updateActiveCandle(id: string, price: number, now: number) {
         }
 
         // ==== Crear la nueva vela ====
-        await prisma.candle.create({
-          data: {
-            valueId: id,
-            timeframe: label,
-            ts: new Date(candle.startedAt),
-            time: BigInt(candle.startedAt),
-            open: candle.open,
-            high: candle.high,
-            low: candle.low,
-            close: candle.close,
-          },
-        });
+await prisma.candle.upsert({
+  where: {
+    valueId_timeframe_time: {
+      valueId: id,
+      timeframe: label,
+      time: active.startedAt,
+    },
+  },
+  update: {
+    high: active.high,
+    low: active.low,
+    close: active.close,
+  },
+  create: {
+    valueId: id,
+    timeframe: label,
+    ts: now,
+    open: active.open,
+    high: active.high,
+    low: active.low,
+    close: active.close,
+    time: active.startedAt,
+  },
+});
+
 
         console.log(`💾 Vela cerrada ${id} (${label}) ${new Date(candle.startedAt).toLocaleString()}`);
       } catch (err) {
