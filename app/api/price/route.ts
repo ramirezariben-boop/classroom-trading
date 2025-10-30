@@ -1,9 +1,9 @@
-// api/price/route.ts
+// app/api/price/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
-import { safePrisma } from "@/app/lib/prisma";
+import { prisma } from "@/app/lib/prisma"; // ✅ corregido: solo prisma
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -133,7 +133,7 @@ function computeDailyBaseline(sig: Signals, factors: any) {
 
 // ===== Temporalidades =====
 const TIMEFRAMES = [
-  { label: "5m", ms: 5 * 60_000 },
+  { label: "5m", ms: 10_000 },
   { label: "15m", ms: 15 * 60_000 },
   { label: "1h", ms: 60 * 60_000 },
   { label: "4h", ms: 4 * 60 * 60_000 },
@@ -141,13 +141,13 @@ const TIMEFRAMES = [
   { label: "1w", ms: 7 * 24 * 60 * 60_000 },
 ];
 
-// ===== Gestión de velas activas (blindada contra desconexiones) =====
+// ===== Gestión de velas activas =====
 async function updateActiveCandle(id: string, price: number, now: number) {
   for (const { label, ms } of TIMEFRAMES) {
     const key = `${id}-${label}`;
     let active = state.activeCandles.get(key);
 
-    // Crear una vela inicial si no existe
+    // Crear vela inicial si no existe
     if (!active) {
       active = { open: price, high: price, low: price, close: price, startedAt: now };
       state.activeCandles.set(key, active);
@@ -159,49 +159,39 @@ async function updateActiveCandle(id: string, price: number, now: number) {
     if (price > active.high) active.high = price;
     if (price < active.low) active.low = price;
 
-    // Cuando se cumple la duración del timeframe (por ejemplo, 5m)
+    // Cuando se cumple la duración del timeframe (ej. 5m)
     if (now - active.startedAt >= ms) {
       const candle = { ...active };
 
       try {
         // ==== Control de límite (1500 velas por timeframe) ====
-        const count = await safePrisma(() =>
-          prisma.candle.count({ where: { valueId: id, timeframe: label } })
-        );
-
+        const count = await prisma.candle.count({ where: { valueId: id, timeframe: label } });
         if (count >= 1500) {
-          const oldest = await safePrisma(() =>
-            prisma.candle.findFirst({
-              where: { valueId: id, timeframe: label },
-              orderBy: { ts: "asc" },
-              select: { time: true },
-            })
-          );
-
+          const oldest = await prisma.candle.findFirst({
+            where: { valueId: id, timeframe: label },
+            orderBy: { ts: "asc" },
+            select: { time: true },
+          });
           if (oldest) {
-            await safePrisma(() =>
-              prisma.candle.deleteMany({
-                where: { valueId: id, timeframe: label, time: oldest.time },
-              })
-            );
+            await prisma.candle.deleteMany({
+              where: { valueId: id, timeframe: label, time: oldest.time },
+            });
           }
         }
 
         // ==== Crear la nueva vela ====
-        await safePrisma(() =>
-          prisma.candle.create({
-            data: {
-              valueId: id,
-              timeframe: label,
-              ts: new Date(candle.startedAt),
-              time: BigInt(candle.startedAt),
-              open: candle.open,
-              high: candle.high,
-              low: candle.low,
-              close: candle.close,
-            },
-          })
-        );
+        await prisma.candle.create({
+          data: {
+            valueId: id,
+            timeframe: label,
+            ts: new Date(candle.startedAt),
+            time: BigInt(candle.startedAt),
+            open: candle.open,
+            high: candle.high,
+            low: candle.low,
+            close: candle.close,
+          },
+        });
 
         console.log(`💾 Vela cerrada ${id} (${label}) ${new Date(candle.startedAt).toLocaleString()}`);
       } catch (err) {
@@ -220,11 +210,10 @@ async function updateActiveCandle(id: string, price: number, now: number) {
   }
 }
 
-
-// ===== Loop automático para generar ticks incluso sin tráfico =====
+// ===== Loop automático =====
 if (!(globalThis as any).__PRICE_LOOP__) {
   (globalThis as any).__PRICE_LOOP__ = true;
-  const TICK_INTERVAL = 7000; // 7 s por defecto (se puede ajustar)
+  const TICK_INTERVAL = 7000;
   const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
   (async function loop() {
@@ -239,10 +228,8 @@ if (!(globalThis as any).__PRICE_LOOP__) {
   })();
 }
 
-
 // ===== Handler principal =====
 export async function GET(req: Request) {
-  // === 🧠 Detectar si viene del cron ===
   const ua = req.headers.get("user-agent")?.toLowerCase() || "";
   const url = new URL(req.url);
   const key = url.searchParams.get("key");
@@ -252,9 +239,7 @@ export async function GET(req: Request) {
     ua.includes("uptime") ||
     ua.includes("monitor");
 
-  if (isCron) {
-    console.log("⏰ CronJob ejecutó actualización silenciosa", new Date().toISOString());
-  }
+  if (isCron) console.log("⏰ CronJob ejecutó actualización silenciosa", new Date().toISOString());
 
   const now = Date.now();
   const factors = loadFactors();
@@ -301,12 +286,8 @@ export async function GET(req: Request) {
   for (const [id, mu] of Object.entries(DEFAULTS))
     PRICES[id] = state.lastPrices.get(id) ?? mu;
 
-  // === 🚀 Respuesta reducida si viene del cron ===
-  if (isCron) {
-    return NextResponse.json({ ok: true, ts: now });
-  }
+  if (isCron) return NextResponse.json({ ok: true, ts: now });
 
-  // === Respuesta completa para usuarios ===
   return NextResponse.json(
     { ok: true, prices: PRICES, ts: now },
     { status: 200, headers: { "Cache-Control": "no-store" } }

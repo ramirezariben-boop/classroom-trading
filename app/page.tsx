@@ -228,23 +228,51 @@ useEffect(() => {
     try {
       const res = await fetch("/api/price-tick", { cache: "no-store" });
       if (!res.ok) return;
-      const data = await res.json() as {
+      const data = (await res.json()) as {
         prices: Record<string, number>;
         ts: number;
       };
       const now = data.ts || Date.now();
 
-      setValues(prev => {
+      // 🔹 Actualiza precios visibles en tarjetas
+      setValues((prev) => {
         const next = { ...prev };
         for (const id of Object.keys(next)) {
           const old = next[id];
           const p = data.prices[id] ?? old.price;
           const changePct = +(((p - old.price) / Math.max(1e-9, old.price)) * 100).toFixed(2);
-          next[id] = { ...old, price: p, changePct, updatedAt: now };
+          next[id] = { ...old, price: p, changePct, updatedAt: now + Math.random() * 0.001 };
         }
         return next;
       });
 
+      // 🔹 Actualiza vela en curso SOLO si hay gráfico abierto
+      if (!chartFor) return;
+
+      setHistory((prev) => {
+        const next = { ...prev };
+        const arr = next[chartFor];
+        const price = data.prices[chartFor];
+        if (!arr || arr.length === 0 || !price) return prev;
+
+        const tsNow = Date.now();
+        const last = arr[arr.length - 1];
+
+        // Solo actualizamos si la vela pertenece al timeframe actual (<5 min)
+        if (tsNow - last.time > 5 * 60_000) return prev;
+
+        // Actualiza la vela actual
+        const newLast = {
+          ...last,
+          high: Math.max(last.high, price),
+          low: Math.min(last.low, price),
+          close: price,
+          time: tsNow,
+        };
+
+        next[chartFor] = [...arr.slice(0, -1), newLast];
+        return next;
+      });
     } catch (e) {
       // no log
     }
@@ -253,7 +281,8 @@ useEffect(() => {
   tick();
   timer = setInterval(tick, POLL_MS);
   return () => clearInterval(timer);
-}, [mounted]);
+}, [mounted, chartFor]);
+
 
 const [top5, setTop5] = useState<{ id:number; user:string; points:number }[]>([]);
 
@@ -265,31 +294,48 @@ useEffect(() => {
   })();
 }, []);
 
-// === Cargar velas al abrir el gráfico (solo la primera vez) ===
+// === Cargar velas y refrescarlas automáticamente ===
 useEffect(() => {
-  async function loadCandles() {
-    if (!chartFor) return; // no hacer nada si no hay gráfico abierto
-    try {
-      const id = chartFor.toLowerCase();
-      const tf = "5m"; // 👈 forzamos timeframe existente
+  if (!chartFor) return;
 
+  const id = chartFor.toLowerCase();
+  const tf = "5m";
+
+  async function loadCandles() {
+    try {
       const res = await fetch(`/api/candles?id=${id}&tf=${tf}&limit=1500`, { cache: "no-store" });
       const json = await res.json();
-
-      console.log(`🕯️ ${json.candles?.length ?? 0} velas recibidas para ${id} (${tf})`);
+      console.log(`🕯️ ${json.candles?.length ?? 0} velas actualizadas para ${id} (${tf})`);
       if (json.candles?.length) {
-        // Insertamos directamente en history
-        setHistory((prev) => ({
-          ...prev,
-          [chartFor]: json.candles,
-        }));
+        setHistory((prev) => {
+  const prevArr = prev[chartFor] ?? [];
+  const newArr = json.candles ?? [];
+
+  // Detectar realmente nuevas velas por timestamp mayor
+  const lastTime = prevArr.at(-1)?.time ?? 0;
+  const added = newArr.filter(c => c.time > lastTime);
+
+  if (added.length === 0) return prev; // nada nuevo
+  const merged = [...prevArr, ...added].slice(-1500);
+
+  console.log(`📈 ${added.length} velas nuevas agregadas a ${chartFor}`);
+  return { ...prev, [chartFor]: merged };
+});
+
       }
     } catch (err) {
-      console.error("❌ Error al cargar velas:", err);
+      console.error("❌ Error al refrescar velas:", err);
     }
   }
 
+  // Cargar inmediatamente
   loadCandles();
+
+  // Refrescar cada 15 segundos
+  const interval = setInterval(loadCandles, 15000);
+
+  // Limpiar al cerrar el gráfico
+  return () => clearInterval(interval);
 }, [chartFor]);
 
 

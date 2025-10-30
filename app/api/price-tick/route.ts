@@ -53,5 +53,8 @@ export async function GET() {
     prices[id] = value;
   }
 
+fetch("http://localhost:3000/api/price?key=dev").catch(() => {});
+
   return NextResponse.json({ prices, ts: now });
 }
+
