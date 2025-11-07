@@ -264,14 +264,15 @@ if (forceClose || now - active.startedAt >= ms) {
         },
       });
 
-      // Reiniciar
-      state.activeCandles.set(key, {
-        open: price,
-        high: price,
-        low: price,
-        close: price,
-        startedAt: currentBucket,
-      });
+      // Reiniciar nueva vela sin gap: open = close de la anterior
+state.activeCandles.set(key, {
+  open: candle.close,  // << continuidad
+  high: candle.close,
+  low: candle.close,
+  close: candle.close,
+  startedAt: currentBucket,
+});
+
     }
   }
 }
