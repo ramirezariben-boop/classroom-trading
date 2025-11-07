@@ -26,20 +26,18 @@ export async function GET(req: Request) {
     });
 
     const candles = rows
-      .map((r) => ({
-        time: Number(r.time),
-        open: r.open,
-        high: r.high,
-        low: r.low,
-        close: r.close,
-      }))
-
-  // 🔹 Asegura que no haya valores corruptos
+  .map((r) => ({
+    // 🩹 Asegura que siempre haya timestamp válido
+    time: r.time ? new Date(r.time).getTime() : new Date(r.ts).getTime(),
+    open: r.open,
+    high: r.high,
+    low: r.low,
+    close: r.close,
+  }))
   .filter((c) => !Number.isNaN(c.open) && c.open > 0)
-  // 🔹 Ordena cronológicamente ascendente (de la más vieja a la más nueva)
   .sort((a, b) => a.time - b.time)
-  // 🔹 Limita a las 1500 más recientes (siempre)
   .slice(-1500);
+
 
     return NextResponse.json(
       { ok: true, id, tf, count: candles.length, candles },

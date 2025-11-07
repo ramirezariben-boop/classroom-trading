@@ -416,33 +416,61 @@ useEffect(() => {
 
   async function loadAllCandles() {
     try {
-      // recorre todos los valores importantes
       for (const v of Object.values(DEFAULT_VALUES)) {
         const id = v.id.toLowerCase();
-        const res = await fetch(`/api/candles?id=${id}&tf=${tf}&limit=1500`, { cache: "no-store" });
+        const res = await fetch(`/api/candles?id=${id}&tf=${tf}&limit=1500`, {
+          cache: "no-store",
+        });
         const json = await res.json();
 
-        if (json.candles?.length) {
-          setHistory((prev) => {
-            const prevArr = prev[id] ?? [];
-            const newArr = json.candles;
-            const lastTime = prevArr.at(-1)?.time ?? 0;
-            const added = newArr.filter((c) => c.time > lastTime);
-            if (added.length === 0) return prev;
-            return { ...prev, [id]: [...prevArr, ...added].slice(-1500) };
-          });
-        }
+        if (!json.candles?.length) continue;
+
+        setHistory((prev) => {
+          const prevArr = prev[id] ?? [];
+          const newArr = json.candles
+            // 🩹 Asegura que todas las velas tengan timestamp numérico válido
+            .map((c: any) => ({
+              ...c,
+              time: typeof c.time === "number" && !Number.isNaN(c.time)
+                ? c.time
+                : Date.now(),
+            }))
+            // 🔹 Ordena por tiempo ascendente
+            .sort((a: any, b: any) => a.time - b.time);
+
+          // 🧭 Calcula el último tiempo ya conocido
+          const lastTime = prevArr.at(-1)?.time ?? 0;
+
+          // 🔹 Detecta solo las realmente nuevas
+          const added = newArr.filter(
+            (c: any) => typeof c.time === "number" && c.time > lastTime
+          );
+
+          if (added.length === 0) return prev;
+
+          console.log(
+            `📈 ${id}: ${added.length} vela(s) nueva(s) detectada(s) → última ${new Date(
+              added.at(-1).time
+            ).toLocaleTimeString()}`
+          );
+
+          return {
+            ...prev,
+            [id]: [...prevArr, ...added].slice(-1500),
+          };
+        });
       }
     } catch (err) {
       console.error("❌ Error al refrescar velas:", err);
     }
   }
 
-  // cargar una vez y luego actualizar cada 15 s
+  // 🔁 Carga inicial + refresco cada 30 s
   loadAllCandles();
-  const interval = setInterval(loadAllCandles, 15000);
+  const interval = setInterval(loadAllCandles, 30000);
   return () => clearInterval(interval);
 }, []);
+
 
   // === Resample helper ===
   function resample(candles: Candle[], tfMs: number): Candle[] {
