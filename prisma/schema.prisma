@@ -72,7 +72,7 @@ model Candle {
   high      Float
   low       Float
   close     Float
-  time      BigInt
+  time      DateTime
 
   @@id([valueId, timeframe, time])
 }
