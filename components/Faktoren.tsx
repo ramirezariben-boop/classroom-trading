@@ -71,8 +71,9 @@ const metrics: Metric[] = [
   const closeChart = () => setSelected(null);
 
   const lower = selected?.toLowerCase() || "";
-  const isHistorical =
-    lower === "asistencia" || lower === "calificaciones";
+const isHistorical =
+  ["asistencia", "calificaciones", "tareas", "tareas extra"].includes(lower);
+
 
   // === Datos para barras (actual) ===
   const metric = metrics.find((m) => m.name === selected);
