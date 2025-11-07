@@ -103,6 +103,12 @@ function ZoomableCandleWrapper({
   const [visibleCount, setVisibleCount] = useState(16);
   const [scrollOffset, setScrollOffset] = useState(0);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const [portfolioSummary, setPortfolioSummary] = useState<{
+  invested: number;
+  profit: number;
+  total: number;
+} | null>(null);
+
 
   // 🔍 Zoom con la rueda
   function handleWheel(e: React.WheelEvent) {
@@ -206,6 +212,7 @@ function ZoomableCandleWrapper({
 // ==== Componente principal ====
 export default function Page() {
   const [mounted, setMounted] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; color: string } | null>(null);
   const [prevMap, setPrevMap] = useState<Record<string, number>>({});
   const [student, setStudent] = useState<{ name: string; points: number }>({ name: "Alumno Demo", points: 0 });
   const [categories] = useState<Category[]>(DEFAULT_CATEGORIES);
@@ -244,28 +251,28 @@ export default function Page() {
 useEffect(() => {
   const html = document.documentElement;
   const body = document.body;
+  const hasModal = !!(chartFor || loginOpen);
 
-  if (chartFor || loginOpen) {
-    const originalHtmlOverflow = html.style.overflow;
-    const originalBodyOverflow = body.style.overflow;
-
+  if (hasModal) {
+    const prevHtml = html.style.overflow;
+    const prevBody = body.style.overflow;
     html.style.overflow = "hidden";
     body.style.overflow = "hidden";
-
-    // También bloquea el desplazamiento táctil (para móviles)
+    body.classList.add("has-modal");
     const preventScroll = (e: WheelEvent | TouchEvent) => e.preventDefault();
     window.addEventListener("wheel", preventScroll, { passive: false });
     window.addEventListener("touchmove", preventScroll, { passive: false });
-
     return () => {
-      html.style.overflow = originalHtmlOverflow;
-      body.style.overflow = originalBodyOverflow;
+      html.style.overflow = prevHtml;
+      body.style.overflow = prevBody;
+      body.classList.remove("has-modal");
       window.removeEventListener("wheel", preventScroll);
       window.removeEventListener("touchmove", preventScroll);
     };
+  } else {
+    body.classList.remove("has-modal");
   }
 }, [chartFor, loginOpen]);
-
 
 
   useEffect(() => setMounted(true), []);
@@ -415,54 +422,53 @@ useEffect(() => {
   const tf = "5m";
 
   async function loadAllCandles() {
-    try {
-      for (const v of Object.values(DEFAULT_VALUES)) {
-        const id = v.id.toLowerCase();
-        const res = await fetch(`/api/candles?id=${id}&tf=${tf}&limit=1500`, {
-          cache: "no-store",
-        });
-        const json = await res.json();
+try {
+  await Promise.all(
+    Object.values(DEFAULT_VALUES).map(async (v) => {
+      const id = v.id.toLowerCase();
+      const res = await fetch(`/api/candles?id=${id}&tf=${tf}&limit=1500`, {
+        cache: "no-store",
+      });
+      const json = await res.json();
 
-        if (!json.candles?.length) continue;
+      if (!json.candles?.length) return;
 
-        setHistory((prev) => {
-          const prevArr = prev[id] ?? [];
-          const newArr = json.candles
-            // 🩹 Asegura que todas las velas tengan timestamp numérico válido
-            .map((c: any) => ({
-              ...c,
-              time: typeof c.time === "number" && !Number.isNaN(c.time)
+      setHistory((prev) => {
+        const prevArr = prev[id] ?? [];
+        const newArr = json.candles
+          .map((c: any) => ({
+            ...c,
+            time:
+              typeof c.time === "number" && !Number.isNaN(c.time)
                 ? c.time
                 : Date.now(),
-            }))
-            // 🔹 Ordena por tiempo ascendente
-            .sort((a: any, b: any) => a.time - b.time);
+          }))
+          .sort((a: any, b: any) => a.time - b.time);
 
-          // 🧭 Calcula el último tiempo ya conocido
-          const lastTime = prevArr.at(-1)?.time ?? 0;
+        const lastTime = prevArr.at(-1)?.time ?? 0;
+        const added = newArr.filter(
+          (c: any) => typeof c.time === "number" && c.time > lastTime
+        );
 
-          // 🔹 Detecta solo las realmente nuevas
-          const added = newArr.filter(
-            (c: any) => typeof c.time === "number" && c.time > lastTime
-          );
+        if (added.length === 0) return prev;
 
-          if (added.length === 0) return prev;
+        console.log(
+          `📈 ${id}: ${added.length} vela(s) nueva(s) → última ${new Date(
+            added.at(-1).time
+          ).toLocaleTimeString()}`
+        );
 
-          console.log(
-            `📈 ${id}: ${added.length} vela(s) nueva(s) detectada(s) → última ${new Date(
-              added.at(-1).time
-            ).toLocaleTimeString()}`
-          );
+        return {
+          ...prev,
+          [id]: [...prevArr, ...added].slice(-1500),
+        };
+      });
+    })
+  );
+} catch (err) {
+  console.error("❌ Error al refrescar velas:", err);
+}
 
-          return {
-            ...prev,
-            [id]: [...prevArr, ...added].slice(-1500),
-          };
-        });
-      }
-    } catch (err) {
-      console.error("❌ Error al refrescar velas:", err);
-    }
   }
 
   // 🔁 Carga inicial + refresco cada 30 s
@@ -549,11 +555,14 @@ useEffect(() => {
     }
   }
 
-  // === Portafolio ===
+// === Portafolio ===
 async function refreshPortfolio() {
   try {
     const data = await api<{
       points: number;
+      invested: number;
+      profit: number;
+      total: number;
       positions: {
         valueId: string;
         qty: number;
@@ -564,9 +573,17 @@ async function refreshPortfolio() {
       txs: any[];
     }>("/api/portfolio");
 
+    // 🪙 Actualizar los valores principales
     setPoints(Number(data.points));
 
-    // 🔹 Conservamos toda la información, no solo qty y avgPrice
+    // 🧩 Guardar resumen (para mostrar equity, invertido, etc.)
+    setPortfolioSummary({
+      invested: data.invested,
+      profit: data.profit,
+      total: data.total,
+    });
+
+    // 🔹 Actualizar posiciones
     const newPositions: Record<
       string,
       { qty: number; avgPrice: number; categoryId?: string; description?: string }
@@ -583,6 +600,7 @@ async function refreshPortfolio() {
 
     setPositions(newPositions);
 
+    // 🔹 Actualizar transacciones recientes
     const mapped = data.txs.map((t) => ({
       id: t.id,
       ts: new Date(t.ts).getTime(),
@@ -595,7 +613,12 @@ async function refreshPortfolio() {
 
     if (txScope === "me") setTxs(mapped);
 
-    console.log("🧾 Portafolio actualizado:", newPositions);
+    console.log("🧾 Portafolio actualizado:", {
+      points: data.points,
+      invested: data.invested,
+      profit: data.profit,
+      total: data.total,
+    });
   } catch (e) {
     console.error("Error cargando portafolio", e);
   }
@@ -619,7 +642,7 @@ async function refreshPortfolio() {
     }));
   }
 
-  // === Trading ===
+// === Trading ===
 async function placeOrder(mode: "BUY" | "SELL", valueId: string, qty: number) {
   const price = values[valueId]?.price;
   if (!price || qty <= 0) return;
@@ -628,7 +651,7 @@ async function placeOrder(mode: "BUY" | "SELL", valueId: string, qty: number) {
   if (!user) {
     const cost = +(price * qty).toFixed(2);
     if (student.points < cost) {
-      alert("No tienes suficientes puntos para realizar esta operación.");
+      showToast("No tienes suficientes puntos para realizar esta operación.", "red");
       return;
     }
     setStudent((s) => ({ ...s, points: +(s.points - cost).toFixed(2) }));
@@ -636,6 +659,7 @@ async function placeOrder(mode: "BUY" | "SELL", valueId: string, qty: number) {
       ...t,
       { id: Math.random().toString(), ts: Date.now(), type: mode, valueId, qty, deltaPoints: -cost },
     ]);
+    showToast(`Operación demo: ${mode === "BUY" ? "Compra" : "Venta"} realizada`, "blue");
     return;
   }
 
@@ -650,17 +674,47 @@ async function placeOrder(mode: "BUY" | "SELL", valueId: string, qty: number) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Error al procesar la operación.");
 
-// Refrescar portafolio y transacciones SIEMPRE
-await refreshPortfolio();
-const updated = await fetchTxs("me");
-setTxs(updated);
-setTrade(null);
+    await refreshPortfolio();
+    const updated = await fetchTxs("me");
+    setTxs(updated);
+    setTrade(null);
 
+    showToast(
+      `${mode === "BUY" ? "Compra" : "Venta"} realizada exitosamente.`,
+      mode === "BUY" ? "green" : "red"
+    );
   } catch (e: any) {
-    alert(e.message || "Error al procesar la operación");
+    showToast(e.message || "Error al procesar la operación", "red");
   }
 }
 
+// === Cierre de posición ===
+async function handleClosePosition(valueId: string, price: number) {
+  if (!confirm(`¿Cerrar tu posición en ${valueId}?`)) return;
+  try {
+    const res = await fetch("/api/close", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ valueId, price }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Error al cerrar");
+
+    const profit = json.profit ?? 0;
+    const color = profit >= 0 ? "green" : "red";
+    showToast(
+      `${profit >= 0 ? "Ganancia" : "Pérdida"}: ${
+        profit >= 0 ? "+" : ""
+      }${profit.toFixed(2)} MXP`,
+      color
+    );
+
+    await refreshPortfolio();
+    setChartFor(null);
+  } catch (err: any) {
+    showToast("Error: " + err.message, "red");
+  }
+}
 
   // === Transferencias ===
   async function doTransfer() {
@@ -780,35 +834,62 @@ setTrade(null);
         </div>
       </header>
 
-      {/* ==== Resumen global del portafolio ==== */}
-      {user && portfolioSummary && (
-        <div className="mb-6 bg-neutral-900 border border-neutral-800 rounded-2xl p-4 max-w-6xl mx-auto flex flex-wrap justify-between gap-4">
-          <div>
-            <div className="text-sm text-neutral-400">Saldo disponible</div>
-            <div className="text-xl font-semibold">{fmt.format(points)} MXP</div>
-          </div>
-          <div>
-            <div className="text-sm text-neutral-400">Valor actual del portafolio</div>
-            <div className="text-xl font-semibold">{fmt.format(portfolioSummary.currentValue)} MXP</div>
-          </div>
-          <div>
-            <div className="text-sm text-neutral-400">Invertido originalmente</div>
-            <div className="text-xl font-semibold">{fmt.format(portfolioSummary.invested)} MXP</div>
-          </div>
-          <div>
-            <div className="text-sm text-neutral-400">Ganancia / pérdida actual</div>
-            <div
-              className={
-                "text-xl font-semibold " +
-                (portfolioSummary.profit >= 0 ? "text-emerald-400" : "text-red-400")
-              }
-            >
-              {portfolioSummary.profit >= 0 ? "+" : ""}
-              {fmt.format(portfolioSummary.profit)} MXP ({portfolioSummary.profitPct.toFixed(2)}%)
-            </div>
-          </div>
-        </div>
-      )}
+{/* ==== Resumen global del portafolio ==== */}
+{user && (
+  <div className="mb-6 bg-neutral-900 border border-neutral-800 rounded-2xl p-5 max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+    
+    {/* 💰 Puntos disponibles */}
+    <div className="flex flex-col items-center justify-center">
+      <div className="text-sm text-neutral-400">💰 Puntos disponibles</div>
+      <div className="text-xl font-semibold text-white">
+        {fmt.format(points)} MXP
+      </div>
+      <div className="text-xs text-neutral-500 mt-1">(sin invertir)</div>
+    </div>
+
+    {/* 📊 Capital invertido */}
+    <div className="flex flex-col items-center justify-center">
+      <div className="text-sm text-neutral-400">📊 Capital invertido</div>
+      <div className="text-xl font-semibold text-amber-300">
+        {fmt.format(portfolioSummary?.invested ?? 0)} MXP
+      </div>
+      <div className="text-xs text-neutral-500 mt-1">(actualmente en juego)</div>
+    </div>
+
+    {/* 📈 Ganancia/pérdida */}
+    <div className="flex flex-col items-center justify-center">
+      <div className="text-sm text-neutral-400">📈 Ganancia / pérdida</div>
+      <div
+        className={
+          "text-xl font-semibold " +
+          ((portfolioSummary?.profit ?? 0) >= 0
+            ? "text-emerald-400"
+            : "text-red-400")
+        }
+      >
+        {portfolioSummary?.profit >= 0 ? "+" : ""}
+        {fmt.format(portfolioSummary?.profit ?? 0)} MXP
+      </div>
+      <div className="text-xs text-neutral-500 mt-1">
+        {portfolioSummary?.profit >= 0 ? "Ganando" : "Perdiendo"} actualmente
+      </div>
+    </div>
+
+    {/* 🧾 Puntos totales */}
+    <div className="flex flex-col items-center justify-center">
+      <div className="text-sm text-neutral-400">🧾 Puntos totales</div>
+      <div className="text-xl font-semibold text-blue-400">
+        {fmt.format(
+          (portfolioSummary?.total ??
+            (points + (portfolioSummary?.invested ?? 0) + (portfolioSummary?.profit ?? 0)))
+        )}{" "}
+        MXP
+      </div>
+      <div className="text-xs text-neutral-500 mt-1">(equity total)</div>
+    </div>
+
+  </div>
+)}
 
       {/* ==== Contenido principal ==== */}
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
@@ -971,30 +1052,58 @@ setTrade(null);
                 <th className="text-right py-2">Cantidad</th>
                 <th className="text-right py-2">Precio promedio</th>
                 <th className="text-right py-2">Valor actual</th>
+                <th className="text-right py-2">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {bienes.map(([id, pos]) => {
-                const v = values[id] || {};
-                const priceNow = v.price ?? 0;
-                const total = pos.qty * priceNow;
-                return (
-                  <tr
-                    key={id}
-                    className="border-b border-neutral-800 hover:bg-neutral-800/50"
-                  >
-                    <td className="py-2">{v.name ?? id}</td>
-                    <td className="py-2 text-neutral-400">
-                      {pos.description ?? v.description ?? "—"}
-                    </td>
-                    <td className="py-2 text-right">{pos.qty}</td>
-                    <td className="py-2 text-right">
-                      {fmt.format(pos.avgPrice)} MXP
-                    </td>
-                    <td className="py-2 text-right">{fmt.format(total)} MXP</td>
-                  </tr>
-                );
-              })}
+             {bienes.map(([id, pos]) => {
+  const v = values[id] || {};
+  const priceNow = v.price ?? 0;
+  const total = pos.qty * priceNow;
+
+  return (
+    <tr
+      key={id}
+      className="border-b border-neutral-800 hover:bg-neutral-800/50"
+    >
+      <td
+  className="py-2 cursor-pointer text-blue-400 hover:text-blue-300 underline"
+  onClick={() => {
+    setChartFor(id);
+    setCandlesBase((prev) => {
+      if (prev?.[id]?.length) return prev;
+      const p = values[id].price;
+      const now = Date.now();
+      return {
+        ...prev,
+        [id]: [{ time: now, open: p, high: p, low: p, close: p }],
+      };
+    });
+  }}
+  title="Ver gráfico"
+>
+  {v.name ?? id}
+</td>
+
+      <td className="py-2 text-neutral-400">
+        {pos.description ?? v.description ?? "—"}
+      </td>
+      <td className="py-2 text-right">{pos.qty}</td>
+      <td className="py-2 text-right">{fmt.format(pos.avgPrice)} MXP</td>
+      <td className="py-2 text-right">{fmt.format(total)} MXP</td>
+<td className="py-2 text-right">
+  <button
+    onClick={() => handleClosePosition(id, v.price ?? 0)}
+    className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded-lg"
+  >
+    Cerrar
+  </button>
+</td>
+
+    </tr>
+  );
+})}
+
             </tbody>
             <tfoot>
               <tr className="border-t border-neutral-700 font-semibold">
@@ -1029,21 +1138,30 @@ setTrade(null);
             <h3 className="font-semibold mb-2">Orden rápida</h3>
             {trade ? (
               <div className="space-y-3">
-                <div className="text-sm text-neutral-400">Modo: {trade.mode}</div>
+                <div className="text-sm text-neutral-400">
+  Modo: {trade.mode} · Ingresa el monto en MXP a invertir
+</div>
+
                 <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    value={qty}
-                    onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
-                    className="w-24 bg-neutral-800 rounded-lg px-2 py-1"
-                  />
-                  <button
-                    onClick={() => placeOrder(trade.mode, trade.valueId, qty)}
-                    className="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded-lg"
-                  >
-                    Confirmar
-                  </button>
+                 <input
+  type="number"
+  min={1}
+  value={qty}
+  onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
+  className="w-28 bg-neutral-800 rounded-lg px-2 py-1"
+  placeholder="Monto MXP"
+/>
+<button
+  onClick={() => {
+    const price = values[trade.valueId]?.price || 1;
+    const units = qty / price;
+    placeOrder(trade.mode, trade.valueId, units);
+  }}
+  className="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded-lg"
+>
+  Confirmar
+</button>
+
                   <button
                     onClick={() => setTrade(null)}
                     className="bg-neutral-700 hover:bg-neutral-600 px-3 py-1 rounded-lg"
@@ -1238,6 +1356,45 @@ setTrade(null);
       </div>
 
       {(derivedCandles?.length ?? 0) > 0 ? (
+
+{/* 🔹 Info y botón de cierre (solo si hay posición abierta) */}
+{positions[chartFor]?.qty > 0 && (
+  <div className="mb-4 text-right">
+    {/* 📈 Ganancia/pérdida en tiempo real */}
+    {(() => {
+      const pos = positions[chartFor];
+      const current = selected.price ?? 0;
+      const invested = pos.avgPrice * pos.qty;
+      const currentValue = current * pos.qty;
+      const profit = currentValue - invested;
+      const profitPct = invested > 0 ? (profit / invested) * 100 : 0;
+      return (
+        <div
+          className={
+            "text-sm mb-2 " +
+            (profit >= 0 ? "text-emerald-400" : "text-red-400")
+          }
+        >
+          Ganancia/pérdida actual:{" "}
+          {profit >= 0 ? "+" : ""}
+          {fmt.format(profit)} MXP ({profitPct.toFixed(2)} %)
+        </div>
+      );
+    })()}
+
+    {/* 🔘 Botón de cierre */}
+<button
+  onClick={() => handleClosePosition(chartFor, selected.price ?? 0)}
+  className="bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-lg text-sm font-medium transition"
+>
+  Cerrar inversión
+</button>
+
+  </div>
+)}
+
+
+
         <ZoomableCandleWrapper
           candles={derivedCandles}
           chartFor={chartFor}
@@ -1297,6 +1454,19 @@ setTrade(null);
           </div>
         </div>
       )}
+
+{/* ==== Toast flotante ==== */}
+{toast && (
+  <div
+    className={`fixed bottom-5 right-5 px-4 py-2 rounded-xl shadow-lg text-white text-sm transition-all duration-500 
+      ${toast.color === "green" ? "bg-emerald-600" : toast.color === "red" ? "bg-red-600" : "bg-blue-600"}
+      animate-fade-in-out`}
+  >
+    {toast.msg}
+  </div>
+)}
+
+
     </div>
   );
 }

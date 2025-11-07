@@ -34,6 +34,7 @@ export async function GET() {
                 name: true,
                 categoryId: true,
                 description: true,
+                price: true,
               },
             },
           },
@@ -49,31 +50,52 @@ export async function GET() {
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
     }
 
-const payload = {
-  points: user.points,
-  positions: user.positions.map((p) => ({
-    valueId: p.valueId,
-    qty: p.qty,
-    avgPrice: p.avgPrice,
-    categoryId: p.value?.categoryId?.toLowerCase?.() ?? "(sin categoría)",
-    description: p.value?.description ?? "(sin descripción)",
-  })),
-  txs: user.txs.map((t) => ({
-    id: t.id,
-    type: t.type,
-    valueId: t.valueId,
-    qty: t.qty,
-    deltaPts: t.deltaPts,
-    ts: t.ts,
-  })),
-};
+    // ===== Calcular invertido y profit aproximado =====
+    let invested = 0;
+    let profit = 0;
 
+for (const p of user.positions) {
+  const currentValue = await prisma.value.findUnique({
+    where: { id: p.valueId },
+    select: { price: true },
+  });
+  const currentPrice = currentValue?.price ?? p.avgPrice;
+  invested += p.avgPrice * p.qty;
+  profit += (currentPrice - p.avgPrice) * p.qty;
+}
+
+    const total = user.points + invested + profit;
+
+    // ===== Payload final =====
+    const payload = {
+      points: user.points, // puntos disponibles
+      invested,            // capital invertido
+      profit,              // ganancia/pérdida actual
+      total,               // puntos totales (equity)
+      positions: user.positions.map((p) => ({
+        valueId: p.valueId,
+        qty: p.qty,
+        avgPrice: p.avgPrice,
+        categoryId: p.value?.categoryId?.toLowerCase?.() ?? "(sin categoría)",
+        description: p.value?.description ?? "(sin descripción)",
+      })),
+      txs: user.txs.map((t) => ({
+        id: t.id,
+        type: t.type,
+        valueId: t.valueId,
+        qty: t.qty,
+        deltaPts: t.deltaPts,
+        ts: t.ts,
+      })),
+    };
 
     console.log("✅ Payload listo:", payload);
     return NextResponse.json(payload);
   } catch (err: any) {
     console.error("❌ Error en /api/portfolio:", err);
-    return NextResponse.json({ error: "Error en el servidor", details: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Error en el servidor", details: err.message },
+      { status: 500 }
+    );
   }
 }
-

@@ -1,5 +1,11 @@
+/* =========================================================
+   🌍 GLOBAL STYLES – Classroom Trading
+   ========================================================= */
+
+/* === Tailwind base === */
 @import "tailwindcss";
 
+/* === Variables de tema === */
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -12,6 +18,7 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* === Modo oscuro automático === */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -19,13 +26,18 @@
   }
 }
 
+/* === Estilos base === */
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* ==================== Animaciones ==================== */
+/* =========================================================
+   ⚡ ANIMACIONES
+   ========================================================= */
+
+/* Suave pulsación (por ejemplo, en indicadores de vela) */
 @keyframes pulse-slow {
   0%, 100% { opacity: 0.85; transform: scaleY(1); }
   50% { opacity: 1; transform: scaleY(1.05); }
@@ -33,9 +45,11 @@ body {
 
 .animate-pulse-slow {
   animation: pulse-slow 1.6s ease-in-out infinite;
+  animation-fill-mode: both;
   transform-origin: center bottom;
 }
 
+/* Parpadeo de la vela activa */
 @keyframes candle-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
@@ -43,9 +57,24 @@ body {
 
 .animate-candle-blink {
   animation: candle-blink 1.2s ease-in-out infinite;
+  animation-fill-mode: both;
 }
 
-/* ==================== Scrollbar del gráfico de velas ==================== */
+/* Toast flotante (fade in/out) */
+@keyframes fade-in-out {
+  0%, 100% { opacity: 0; transform: translateY(10px); }
+  10%, 90% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in-out {
+  animation: fade-in-out 3.5s ease-in-out forwards;
+  animation-fill-mode: both;
+}
+
+/* =========================================================
+   🖱️ SCROLLBAR PERSONALIZADA (gráfico horizontal)
+   ========================================================= */
+
 .overflow-x-auto::-webkit-scrollbar {
   height: 8px;
 }
@@ -63,21 +92,28 @@ body {
   background: #525252;
 }
 
-/* ==================== Scroll fixes ==================== */
+/* =========================================================
+   🧩 FIXES DE SCROLL Y MODALES
+   ========================================================= */
 
-/* Eliminar la barra blanca inferior global */
+/* Evita barras blancas o scrolls globales innecesarios */
 html, body {
   overflow-x: hidden !important;
 }
 
-/* Cuando el modal está montado, bloquear overflow-x global */
+/* 🔒 Bloquea overflow cuando hay modales (modern browsers) */
 body:has(div[role="dialog"]),
 body:has(.fixed.inset-0),
 body:has(.modal) {
   overflow-x: clip !important;
 }
 
-/* Oculta scroll horizontal dentro de modales */
+/* 🔒 Alternativa para navegadores antiguos (aplicada vía clase JS) */
+body.has-modal {
+  overflow-x: clip !important;
+}
+
+/* Evita scroll horizontal dentro de modales */
 .modal,
 .fixed.inset-0,
 div[role="dialog"],
@@ -92,7 +128,7 @@ div[role="presentation"] {
   overflow-x: hidden !important;
 }
 
-/* Elimina padding/margin inferior que provoque doble barra */
+/* Previene márgenes/paddings que provocan doble scroll */
 div[data-radix-scroll-area-viewport],
 div[class*="overflow-x-scroll"],
 div[class*="overflow-x-auto"] > div:has(svg),
@@ -106,13 +142,13 @@ div:has(> svg) {
   margin-bottom: 0 !important;
 }
 
-/* Asegura que el SVG no fuerce desbordamiento extra */
+/* Asegura que SVGs no fuercen desbordes */
 .fixed.inset-0 svg {
   display: block;
   max-width: 100%;
 }
 
-/* Elimina el scroll horizontal de modales con fondos específicos */
+/* Modales oscuros comunes */
 div.fixed.inset-0.bg-neutral-950,
 div.fixed.inset-0.bg-neutral-900,
 div.fixed.inset-0.bg-neutral-900\/90,
@@ -129,10 +165,11 @@ div.fixed.inset-0.bg-neutral-950\/70 * {
   padding-bottom: 0 !important;
 }
 
-/* ========================================================= */
-/* 🔧 FIX FINAL: permitir scroll vertical dentro del gráfico */
-/* ========================================================= */
+/* =========================================================
+   📊 GRÁFICO DE VELAS – FIX FINAL
+   ========================================================= */
 
+/* Permite scroll vertical sin romper el horizontal */
 div.candle-scroll-container {
   overflow: auto !important;
   overflow-x: auto !important;
@@ -141,7 +178,7 @@ div.candle-scroll-container {
   max-height: 100% !important;
 }
 
-/* Scrollbar vertical personalizada del gráfico */
+/* Scrollbar vertical del gráfico */
 div.candle-scroll-container::-webkit-scrollbar {
   width: 8px;
 }
@@ -158,4 +195,3 @@ div.candle-scroll-container::-webkit-scrollbar-thumb:hover {
 div.candle-scroll-container::-webkit-scrollbar-track {
   background: transparent;
 }
-
