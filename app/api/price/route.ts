@@ -183,17 +183,17 @@ async function updateActiveCandle(id: string, price: number, now: number) {
         }
 
         await prisma.candle.create({
-          data: {
-            valueId: id,
-            timeframe: label,
-            ts: now,
-            open: candle.open,
-            high: candle.high,
-            low: candle.low,
-            close: candle.close,
-            time: candle.startedAt,
-          },
-        });
+  data: {
+    valueId: id,
+    timeframe: label,
+    ts: new Date(now),            // ✅ Conversión a Date
+    open: candle.open,
+    high: candle.high,
+    low: candle.low,
+    close: candle.close,
+    time: new Date(candle.startedAt),  // ✅ Conversión a Date
+  },
+});
 
         console.log(`💾 Nueva vela ${id} (${label}) ${new Date(candle.startedAt).toLocaleString()}`);
       } catch (err) {
