@@ -164,42 +164,47 @@ async function updateActiveCandle(id: string, price: number, now: number) {
 
     if (now - active.startedAt >= ms) {
       console.log(`🕒 Cerrando vela ${id} (${label}) → ${(now - active.startedAt) / 1000}s transcurridos`);
-
       const candle = { ...active };
 
-      try {
-        const count = await prisma.candle.count({ where: { valueId: id, timeframe: label } });
-        if (count >= 1500) {
-          const oldest = await prisma.candle.findFirst({
-            where: { valueId: id, timeframe: label },
-            orderBy: { ts: "asc" },
-            select: { time: true },
+      // 🔹 Mantener máximo 1500 velas
+      const count = await prisma.candle.count({ where: { valueId: id, timeframe: label } });
+      if (count >= 1500) {
+        const oldest = await prisma.candle.findFirst({
+          where: { valueId: id, timeframe: label },
+          orderBy: { ts: "asc" },
+          select: { time: true },
+        });
+        if (oldest) {
+          await prisma.candle.deleteMany({
+            where: { valueId: id, timeframe: label, time: oldest.time },
           });
-          if (oldest) {
-            await prisma.candle.deleteMany({
-              where: { valueId: id, timeframe: label, time: oldest.time },
-            });
-          }
         }
-
-        await prisma.candle.create({
-  data: {
-    valueId: id,
-    timeframe: label,
-    ts: new Date(now),            // ✅ Conversión a Date
-    open: candle.open,
-    high: candle.high,
-    low: candle.low,
-    close: candle.close,
-    time: new Date(candle.startedAt),  // ✅ Conversión a Date
-  },
-});
-
-        console.log(`💾 Nueva vela ${id} (${label}) ${new Date(candle.startedAt).toLocaleString()}`);
-      } catch (err) {
-        console.error(`⚠️ Error guardando vela ${id} (${label}):`, err);
       }
 
+      // 🔹 Crear nueva vela
+      try {
+        await prisma.candle.create({
+          data: {
+            valueId: id,
+            timeframe: label,
+            ts: new Date(now),
+            open: candle.open,
+            high: candle.high,
+            low: candle.low,
+            close: candle.close,
+            time: new Date(candle.startedAt),
+          },
+        });
+        console.log(`💾 Nueva vela ${id} (${label}) ${new Date(candle.startedAt).toLocaleString()}`);
+      } catch (err: any) {
+        if (err.code === "P2002") {
+          console.warn(`⚠️ Vela duplicada ignorada: ${id} (${label}) ${new Date(candle.startedAt).toLocaleString()}`);
+        } else {
+          console.error(`⚠️ Error guardando vela ${id} (${label}):`, err);
+        }
+      }
+
+      // 🔹 Reiniciar la vela activa
       state.activeCandles.set(key, {
         open: price,
         high: price,
@@ -229,7 +234,6 @@ export async function GET(req: Request) {
   const VOLATILITY = factors.volatility ?? sig.volatility ?? 0.05;
   const TICK_MS = (factors.tickSeconds ?? 7) * 1000;
 
-  // 🟢 Nueva lógica: cada ejecución del cron evalúa si toca cerrar vela
   try {
     for (const [id, lastPrice] of Object.entries(DEFAULTS)) {
       const price = state.lastPrices.get(id) ?? lastPrice;
@@ -239,7 +243,6 @@ export async function GET(req: Request) {
     console.error("❌ Error en verificación de velas:", err);
   }
 
-  // ===== Resto del motor de precios =====
   const dayKey = sig.dayKey ?? new Date().toISOString().slice(0, 10);
   const fKey = JSON.stringify({ date: factors.date ?? null, vol: VOLATILITY });
   if (dayKey !== state.lastDayKey || fKey !== state.lastFactorsKey) {
