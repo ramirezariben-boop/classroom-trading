@@ -42,16 +42,15 @@ type State = {
   lastTick: number;
 };
 
-const state: State =
-  (globalThis as any).__PRICE_STATE__ ??
-  ((globalThis as any).__PRICE_STATE__ = {
-    lastPrices: new Map(),
-    activeCandles: new Map(),
-    lastDayKey: "",
-    lastBaseline: new Map(),
-    lastFactorsKey: "",
-    lastTick: 0,
-  });
+const state: State = {
+  lastPrices: new Map(),
+  activeCandles: new Map(),
+  lastDayKey: "",
+  lastBaseline: new Map(),
+  lastFactorsKey: "",
+  lastTick: 0,
+};
+
 
 // ===== Utils =====
 function randn() {
@@ -60,6 +59,11 @@ function randn() {
   while (v === 0) v = Math.random();
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
+
+function isVercelRuntime() {
+  return !!process.env.VERCEL || !!process.env.NEXT_RUNTIME;
+}
+
 
 async function readJsonSafe<T = any>(...parts: string[]): Promise<T | null> {
   try {
@@ -180,8 +184,41 @@ async function updateActiveCandle(id: string, price: number, now: number) {
     if (price > active.high) active.high = price;
     if (price < active.low) active.low = price;
 
-    // 🔹 Si se cumplió el tiempo, cerrar la vela
-    if (now - active.startedAt >= ms) {
+// 🔸 Guardar progreso parcial si la vela ya tiene más de 30 segundos
+if (now - active.startedAt > 30_000) {
+  await prisma.candle.upsert({
+    where: {
+      valueId_timeframe_time: {
+        valueId: id,
+        timeframe: label,
+        time: new Date(active.startedAt),
+      },
+    },
+    update: {
+      open: active.open,
+      high: active.high,
+      low: active.low,
+      close: active.close,
+      ts: new Date(now),
+    },
+    create: {
+      valueId: id,
+      timeframe: label,
+      ts: new Date(now),
+      open: active.open,
+      high: active.high,
+      low: active.low,
+      close: active.close,
+      time: new Date(active.startedAt),
+    },
+  });
+}
+
+
+// 🕯️ En entorno serverless, forzar cierre inmediato de vela
+const forceClose = isVercelRuntime();
+if (forceClose || now - active.startedAt >= ms) {
+
       const candle = { ...active };
 
       // Mantener máximo 1500 velas

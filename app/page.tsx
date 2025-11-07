@@ -431,7 +431,11 @@ try {
       });
       const json = await res.json();
 
-      if (!json.candles?.length) return;
+      if (!json.candles || json.candles.length === 0) {
+  console.warn(`⚠️ Sin velas disponibles para ${id}`);
+  return;
+}
+
 
       setHistory((prev) => {
         const prevArr = prev[id] ?? [];
