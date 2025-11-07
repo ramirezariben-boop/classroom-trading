@@ -12,7 +12,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "ts-node scripts/seed.ts",
-    "sync:users": "node scripts/syncUsers.js"
+    "sync:users": "node scripts/syncUsers.js",
+    "vercel-build": "prisma generate && next build"
   },
   "dependencies": {
     "@prisma/client": "^6.17.1",
