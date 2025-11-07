@@ -1355,56 +1355,53 @@ async function handleClosePosition(valueId: string, price: number) {
         </button>
       </div>
 
-      {(derivedCandles?.length ?? 0) > 0 ? (
+{(derivedCandles?.length ?? 0) > 0 ? (
+  <>
+    {/* 🔹 Info y botón de cierre (solo si hay posición abierta) */}
+    {positions[chartFor]?.qty > 0 && (
+      <div className="mb-4 text-right">
+        {(() => {
+          const pos = positions[chartFor];
+          const current = selected.price ?? 0;
+          const invested = pos.avgPrice * pos.qty;
+          const currentValue = current * pos.qty;
+          const profit = currentValue - invested;
+          const profitPct = invested > 0 ? (profit / invested) * 100 : 0;
+          return (
+            <div
+              className={
+                "text-sm mb-2 " +
+                (profit >= 0 ? "text-emerald-400" : "text-red-400")
+              }
+            >
+              Ganancia/pérdida actual:{" "}
+              {profit >= 0 ? "+" : ""}
+              {fmt.format(profit)} MXP ({profitPct.toFixed(2)}%)
+            </div>
+          );
+        })()}
 
-{/* 🔹 Info y botón de cierre (solo si hay posición abierta) */}
-{positions[chartFor]?.qty > 0 && (
-  <div className="mb-4 text-right">
-    {/* 📈 Ganancia/pérdida en tiempo real */}
-    {(() => {
-      const pos = positions[chartFor];
-      const current = selected.price ?? 0;
-      const invested = pos.avgPrice * pos.qty;
-      const currentValue = current * pos.qty;
-      const profit = currentValue - invested;
-      const profitPct = invested > 0 ? (profit / invested) * 100 : 0;
-      return (
-        <div
-          className={
-            "text-sm mb-2 " +
-            (profit >= 0 ? "text-emerald-400" : "text-red-400")
-          }
+        <button
+          onClick={() => handleClosePosition(chartFor, selected.price ?? 0)}
+          className="bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-lg text-sm font-medium transition"
         >
-          Ganancia/pérdida actual:{" "}
-          {profit >= 0 ? "+" : ""}
-          {fmt.format(profit)} MXP ({profitPct.toFixed(2)} %)
-        </div>
-      );
-    })()}
+          Cerrar inversión
+        </button>
+      </div>
+    )}
 
-    {/* 🔘 Botón de cierre */}
-<button
-  onClick={() => handleClosePosition(chartFor, selected.price ?? 0)}
-  className="bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-lg text-sm font-medium transition"
->
-  Cerrar inversión
-</button>
-
+    <ZoomableCandleWrapper
+      candles={derivedCandles}
+      chartFor={chartFor}
+      tf={tf}
+    />
+  </>
+) : (
+  <div className="text-sm text-neutral-400">
+    Aún no hay velas para esta temporalidad. Espera unos segundos…
   </div>
 )}
 
-
-
-        <ZoomableCandleWrapper
-          candles={derivedCandles}
-          chartFor={chartFor}
-          tf={tf}
-        />
-      ) : (
-        <div className="text-sm text-neutral-400">
-          Aún no hay velas para esta temporalidad. Espera unos segundos…
-        </div>
-      )}
     </div>
   </div>
 )}
