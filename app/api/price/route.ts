@@ -141,6 +141,105 @@ const TIMEFRAMES = [
   { label: "1w", ms: 7 * 24 * 60 * 60_000 },
 ];
 
+// ===== Gestión de velas activas =====
+async function updateActiveCandle(id: string, price: number, now: number) {
+  for (const { label, ms } of TIMEFRAMES) {
+    const key = `${id}-${label}`;
+    let active = state.activeCandles.get(key);
+    const currentBucket = Math.floor(now / ms) * ms;
+
+    // 🩹 Si no hay vela activa, intenta recuperar la última desde la DB
+    if (!active) {
+      const last = await prisma.candle.findFirst({
+        where: { valueId: id, timeframe: label },
+        orderBy: { time: "desc" },
+      });
+
+      const base = last ?? {
+        open: price,
+        high: price,
+        low: price,
+        close: price,
+        time: new Date(now - ms),
+      };
+
+      active = {
+        open: base.close,
+        high: price,
+        low: price,
+        close: price,
+        startedAt: Math.floor(now / ms) * ms,
+      };
+
+      state.activeCandles.set(key, active);
+      continue;
+    }
+
+    // 🔹 Actualizar vela activa
+    active.close = price;
+    if (price > active.high) active.high = price;
+    if (price < active.low) active.low = price;
+
+    // 🔹 Si se cumplió el tiempo, cerrar la vela
+    if (now - active.startedAt >= ms) {
+      const candle = { ...active };
+
+      // Mantener máximo 1500 velas
+      const count = await prisma.candle.count({ where: { valueId: id, timeframe: label } });
+      if (count >= 1500) {
+        const oldest = await prisma.candle.findFirst({
+          where: { valueId: id, timeframe: label },
+          orderBy: { ts: "asc" },
+          select: { time: true },
+        });
+        if (oldest) {
+          await prisma.candle.deleteMany({
+            where: { valueId: id, timeframe: label, time: oldest.time },
+          });
+        }
+      }
+
+      // Guardar o actualizar la vela
+      await prisma.candle.upsert({
+        where: {
+          valueId_timeframe_time: {
+            valueId: id,
+            timeframe: label,
+            time: new Date(candle.startedAt),
+          },
+        },
+        update: {
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+          ts: new Date(now),
+        },
+        create: {
+          valueId: id,
+          timeframe: label,
+          ts: new Date(now),
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+          time: new Date(candle.startedAt),
+        },
+      });
+
+      // Reiniciar
+      state.activeCandles.set(key, {
+        open: price,
+        high: price,
+        low: price,
+        close: price,
+        startedAt: currentBucket,
+      });
+    }
+  }
+}
+
+
 // ===== Handler principal =====
 export async function GET(req: Request) {
   const ua = req.headers.get("user-agent")?.toLowerCase() || "";
