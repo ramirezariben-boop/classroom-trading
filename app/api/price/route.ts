@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
-import { prisma } from "@/app/lib/prisma"; // ✅ corregido: solo prisma
+import { prisma } from "@/app/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -144,27 +144,30 @@ const TIMEFRAMES = [
 // ===== Gestión de velas activas =====
 async function updateActiveCandle(id: string, price: number, now: number) {
   for (const { label, ms } of TIMEFRAMES) {
+    if (id === "dsgmxp" && label === "5m") {
+      console.log(`⚙️ updateActiveCandle ejecutado para ${id} (${label}) a ${new Date(now).toLocaleTimeString()}`);
+    }
+
     const key = `${id}-${label}`;
     let active = state.activeCandles.get(key);
+    const currentBucket = Math.floor(now / ms) * ms;
 
-    // Crear vela inicial si no existe
     if (!active) {
-      active = { open: price, high: price, low: price, close: price, startedAt: now };
+      active = { open: price, high: price, low: price, close: price, startedAt: currentBucket };
       state.activeCandles.set(key, active);
       continue;
     }
 
-    // Actualizar valores high/low/close
     active.close = price;
     if (price > active.high) active.high = price;
     if (price < active.low) active.low = price;
 
-    // Cuando se cumple la duración del timeframe (ej. 5m)
     if (now - active.startedAt >= ms) {
+      console.log(`🕒 Cerrando vela ${id} (${label}) → ${(now - active.startedAt) / 1000}s transcurridos`);
+
       const candle = { ...active };
 
       try {
-        // ==== Control de límite (1500 velas por timeframe) ====
         const count = await prisma.candle.count({ where: { valueId: id, timeframe: label } });
         if (count >= 1500) {
           const oldest = await prisma.candle.findFirst({
@@ -179,66 +182,33 @@ async function updateActiveCandle(id: string, price: number, now: number) {
           }
         }
 
-        // ==== Crear la nueva vela ====
-await prisma.candle.upsert({
-  where: {
-    valueId_timeframe_time: {
-      valueId: id,
-      timeframe: label,
-      time: active.startedAt,
-    },
-  },
-  update: {
-    high: active.high,
-    low: active.low,
-    close: active.close,
-  },
-  create: {
-    valueId: id,
-    timeframe: label,
-    ts: now,
-    open: active.open,
-    high: active.high,
-    low: active.low,
-    close: active.close,
-    time: active.startedAt,
-  },
-});
+        await prisma.candle.create({
+          data: {
+            valueId: id,
+            timeframe: label,
+            ts: now,
+            open: candle.open,
+            high: candle.high,
+            low: candle.low,
+            close: candle.close,
+            time: candle.startedAt,
+          },
+        });
 
-
-        console.log(`💾 Vela cerrada ${id} (${label}) ${new Date(candle.startedAt).toLocaleString()}`);
+        console.log(`💾 Nueva vela ${id} (${label}) ${new Date(candle.startedAt).toLocaleString()}`);
       } catch (err) {
         console.error(`⚠️ Error guardando vela ${id} (${label}):`, err);
       }
 
-      // Reiniciar la vela activa
       state.activeCandles.set(key, {
         open: price,
         high: price,
         low: price,
         close: price,
-        startedAt: now,
+        startedAt: currentBucket,
       });
     }
   }
-}
-
-// ===== Loop automático =====
-if (!(globalThis as any).__PRICE_LOOP__) {
-  (globalThis as any).__PRICE_LOOP__ = true;
-  const TICK_INTERVAL = 7000;
-  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-
-  (async function loop() {
-    while (true) {
-      try {
-        await fetch(`${BASE_URL}/api/price?key=${process.env.CRON_SECRET || "dev"}`).catch(() => {});
-      } catch (err) {
-        console.error("⛔ Loop interno de price falló:", err);
-      }
-      await new Promise((r) => setTimeout(r, TICK_INTERVAL));
-    }
-  })();
 }
 
 // ===== Handler principal =====
@@ -248,11 +218,10 @@ export async function GET(req: Request) {
   const key = url.searchParams.get("key");
   const isCron =
     key === process.env.CRON_SECRET ||
+    key === "dev" ||
     ua.includes("cron") ||
     ua.includes("uptime") ||
     ua.includes("monitor");
-
-  if (isCron) console.log("⏰ CronJob ejecutó actualización silenciosa", new Date().toISOString());
 
   const now = Date.now();
   const factors = loadFactors();
@@ -260,6 +229,17 @@ export async function GET(req: Request) {
   const VOLATILITY = factors.volatility ?? sig.volatility ?? 0.05;
   const TICK_MS = (factors.tickSeconds ?? 7) * 1000;
 
+  // 🟢 Nueva lógica: cada ejecución del cron evalúa si toca cerrar vela
+  try {
+    for (const [id, lastPrice] of Object.entries(DEFAULTS)) {
+      const price = state.lastPrices.get(id) ?? lastPrice;
+      await updateActiveCandle(id, price, now);
+    }
+  } catch (err) {
+    console.error("❌ Error en verificación de velas:", err);
+  }
+
+  // ===== Resto del motor de precios =====
   const dayKey = sig.dayKey ?? new Date().toISOString().slice(0, 10);
   const fKey = JSON.stringify({ date: factors.date ?? null, vol: VOLATILITY });
   if (dayKey !== state.lastDayKey || fKey !== state.lastFactorsKey) {
@@ -276,7 +256,7 @@ export async function GET(req: Request) {
   const stepCap = 0.02;
 
   for (let s = 0; s < steps; s++) {
-    const tNow = state.lastTick + (s + 1) * TICK_MS;
+    const tNow = Date.now();
     for (const [id, baseDefault] of Object.entries(DEFAULTS)) {
       const mu = state.lastBaseline.get(id) ?? baseDefault;
       const prev = state.lastPrices.get(id) ?? mu;
@@ -288,7 +268,6 @@ export async function GET(req: Request) {
       next = Math.min(bandHi, Math.max(bandLo, next));
       next = +(next.toFixed(mu < 2 ? 4 : 2));
       state.lastPrices.set(id, next);
-
       void updateActiveCandle(id, next, tNow);
     }
   }
@@ -300,9 +279,5 @@ export async function GET(req: Request) {
     PRICES[id] = state.lastPrices.get(id) ?? mu;
 
   if (isCron) return NextResponse.json({ ok: true, ts: now });
-
-  return NextResponse.json(
-    { ok: true, prices: PRICES, ts: now },
-    { status: 200, headers: { "Cache-Control": "no-store" } }
-  );
+  return NextResponse.json({ ok: true, prices: PRICES, ts: now }, { headers: { "Cache-Control": "no-store" } });
 }

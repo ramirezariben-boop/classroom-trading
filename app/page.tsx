@@ -91,6 +91,118 @@ const TIMEFRAMES: Timeframe[] = [
   { id: "1w", label: "1 S", candleMs: 1 * W },
 ];
 
+function ZoomableCandleWrapper({
+  candles,
+  chartFor,
+  tf,
+}: {
+  candles: Candle[];
+  chartFor: string;
+  tf: { id: string };
+}) {
+  const [visibleCount, setVisibleCount] = useState(16);
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+
+  // 🔍 Zoom con la rueda
+  function handleWheel(e: React.WheelEvent) {
+    e.preventDefault();
+    if (e.deltaY > 0) {
+      setVisibleCount((v) => Math.min(128, v * 2));
+    } else {
+      setVisibleCount((v) => Math.max(4, Math.floor(v / 2)));
+    }
+  }
+
+  // 🎢 Cálculo de velas visibles
+  const visibleCandles = useMemo(() => {
+    const start = Math.max(0, candles.length - visibleCount - scrollOffset);
+    const end = Math.max(0, candles.length - scrollOffset);
+    return candles.slice(start, end);
+  }, [candles, visibleCount, scrollOffset]);
+
+  // 📈 Eje Y dinámico
+  const [yMin, yMax] = useMemo(() => {
+    if (!visibleCandles.length) return [0, 1];
+    const lows = visibleCandles.map((c) => c.low);
+    const highs = visibleCandles.map((c) => c.high);
+    const min = Math.min(...lows);
+    const max = Math.max(...highs);
+    const padding = (max - min) * 0.05;
+    return [min - padding, max + padding];
+  }, [visibleCandles]);
+
+  // 🖱️ Arrastre con el mouse
+  const dragging = React.useRef(false);
+  const lastX = React.useRef(0);
+
+  function handleMouseDown(e: React.MouseEvent) {
+    dragging.current = true;
+    lastX.current = e.clientX;
+  }
+
+  function handleMouseUp() {
+    dragging.current = false;
+  }
+
+  function handleMouseMove(e: React.MouseEvent) {
+    if (!dragging.current) return;
+    const delta = e.clientX - lastX.current;
+    if (Math.abs(delta) > 20) {
+      setScrollOffset((prev) =>
+        Math.max(0, Math.min(candles.length - visibleCount, prev + (delta > 0 ? visibleCount / 4 : -visibleCount / 4)))
+      );
+      lastX.current = e.clientX;
+    }
+  }
+
+  // 🧭 Auto-scroll al final cuando se abre
+  useEffect(() => {
+    if (!containerRef.current) return;
+    let tries = 0;
+    const tryScroll = () => {
+      const el = containerRef.current!;
+      const scrollable = el.scrollWidth - el.clientWidth;
+      if (scrollable > 10) {
+        el.scrollLeft = el.scrollWidth;
+        console.log("✅ Auto-scroll aplicado:", el.scrollLeft);
+      } else if (tries < 60) {
+        tries++;
+        requestAnimationFrame(tryScroll);
+      }
+    };
+    requestAnimationFrame(tryScroll);
+  }, [chartFor]);
+
+  return (
+    <div
+      ref={containerRef}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onMouseMove={handleMouseMove}
+      className="overflow-x-auto select-none cursor-grab active:cursor-grabbing"
+    >
+      <div className="min-w-[900px] transition-all duration-300">
+        <CandleChart
+  key={chartFor + tf.id + visibleCount}
+  candles={visibleCandles}
+  height={300}
+  xTicks={6}
+  yTicks={4}
+  bodyWidthRatio={0.4}
+  yMin={yMin}
+  yMax={yMax}
+  highlightLast={true}  // 🔹 ahora siempre true
+/>
+
+      </div>
+    </div>
+  );
+}
+
+
 // ==== Componente principal ====
 export default function Page() {
   const [mounted, setMounted] = useState(false);
@@ -232,6 +344,8 @@ useEffect(() => {
         prices: Record<string, number>;
         ts: number;
       };
+	// 🔹 Log de depuración
+console.log("💫 Tick recibido:", new Date(data.ts).toLocaleTimeString(), "→", Object.keys(data.prices).length, "precios");
       const now = data.ts || Date.now();
 
       // 🔹 Actualiza precios visibles en tarjetas
@@ -249,30 +363,32 @@ useEffect(() => {
       // 🔹 Actualiza vela en curso SOLO si hay gráfico abierto
       if (!chartFor) return;
 
-      setHistory((prev) => {
-        const next = { ...prev };
-        const arr = next[chartFor];
-        const price = data.prices[chartFor];
-        if (!arr || arr.length === 0 || !price) return prev;
+console.log("🧭 Diagnóstico:",
+  "chartFor =", chartFor,
+  "| keys =", Object.keys(data.prices)
+);
 
-        const tsNow = Date.now();
-        const last = arr[arr.length - 1];
+setHistory((prev) => {
+  const next = { ...prev };
+  const arr = next[chartFor];
+  const price = data.prices[chartFor];
+  if (!arr || arr.length === 0 || !price) return prev;
 
-        // Solo actualizamos si la vela pertenece al timeframe actual (<5 min)
-        if (tsNow - last.time > 5 * 60_000) return prev;
+  const last = arr[arr.length - 1];
+  const newLast = {
+    ...last,
+    high: Math.max(last.high, price),
+    low: Math.min(last.low, price),
+    close: price,
+    time: Date.now(),
+  };
 
-        // Actualiza la vela actual
-        const newLast = {
-          ...last,
-          high: Math.max(last.high, price),
-          low: Math.min(last.low, price),
-          close: price,
-          time: tsNow,
-        };
+  next[chartFor] = [...arr.slice(0, -1), newLast];
+  console.log(`📊 Vela actualizada para ${chartFor}:`, price.toFixed(2));
+  return next;
+});
 
-        next[chartFor] = [...arr.slice(0, -1), newLast];
-        return next;
-      });
+
     } catch (e) {
       // no log
     }
@@ -296,48 +412,37 @@ useEffect(() => {
 
 // === Cargar velas y refrescarlas automáticamente ===
 useEffect(() => {
-  if (!chartFor) return;
-
-  const id = chartFor.toLowerCase();
   const tf = "5m";
 
-  async function loadCandles() {
+  async function loadAllCandles() {
     try {
-      const res = await fetch(`/api/candles?id=${id}&tf=${tf}&limit=1500`, { cache: "no-store" });
-      const json = await res.json();
-      console.log(`🕯️ ${json.candles?.length ?? 0} velas actualizadas para ${id} (${tf})`);
-      if (json.candles?.length) {
-        setHistory((prev) => {
-  const prevArr = prev[chartFor] ?? [];
-  const newArr = json.candles ?? [];
+      // recorre todos los valores importantes
+      for (const v of Object.values(DEFAULT_VALUES)) {
+        const id = v.id.toLowerCase();
+        const res = await fetch(`/api/candles?id=${id}&tf=${tf}&limit=1500`, { cache: "no-store" });
+        const json = await res.json();
 
-  // Detectar realmente nuevas velas por timestamp mayor
-  const lastTime = prevArr.at(-1)?.time ?? 0;
-  const added = newArr.filter(c => c.time > lastTime);
-
-  if (added.length === 0) return prev; // nada nuevo
-  const merged = [...prevArr, ...added].slice(-1500);
-
-  console.log(`📈 ${added.length} velas nuevas agregadas a ${chartFor}`);
-  return { ...prev, [chartFor]: merged };
-});
-
+        if (json.candles?.length) {
+          setHistory((prev) => {
+            const prevArr = prev[id] ?? [];
+            const newArr = json.candles;
+            const lastTime = prevArr.at(-1)?.time ?? 0;
+            const added = newArr.filter((c) => c.time > lastTime);
+            if (added.length === 0) return prev;
+            return { ...prev, [id]: [...prevArr, ...added].slice(-1500) };
+          });
+        }
       }
     } catch (err) {
       console.error("❌ Error al refrescar velas:", err);
     }
   }
 
-  // Cargar inmediatamente
-  loadCandles();
-
-  // Refrescar cada 15 segundos
-  const interval = setInterval(loadCandles, 15000);
-
-  // Limpiar al cerrar el gráfico
+  // cargar una vez y luego actualizar cada 15 s
+  loadAllCandles();
+  const interval = setInterval(loadAllCandles, 15000);
   return () => clearInterval(interval);
-}, [chartFor]);
-
+}, []);
 
   // === Resample helper ===
   function resample(candles: Candle[], tfMs: number): Candle[] {
@@ -1079,45 +1184,46 @@ setTrade(null);
 
 
 
-      {/* ==== Modal de Gráfico ==== */}
-      {chartFor && selected && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-2xl rounded-2xl bg-neutral-950 border border-neutral-800 p-5">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div className="text-xs text-neutral-400">Gráfico de velas</div>
-                <div className="text-lg font-semibold">{selected.name}</div>
-                <div className="text-xs text-neutral-500">{selected.description}</div>
-              </div>
-              <button
-                onClick={() => setChartFor(null)}
-                className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700"
-              >
-                Cerrar
-              </button>
-            </div>
+{/* ==== Modal de Gráfico (con zoom, arrastre y parpadeo) ==== */}
+{chartFor && selected && (
+  <div
+    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+    onWheel={(e) => e.stopPropagation()}
+  >
+    <div
+  className="w-full max-w-2xl rounded-2xl bg-neutral-950 border border-neutral-800 p-5"
+  style={{ overflow: "hidden" }} // ✅ fuerza ocultar scrolls verticales
+>
 
-            {(derivedCandles?.length ?? 0) > 0 ? (
-              <div className="overflow-x-auto">
-                <div className="min-w-[900px]">
-                  <CandleChart
-                    key={chartFor + tf.id}
-                    candles={derivedCandles}
-                    height={300}
-                    xTicks={6}
-                    yTicks={4}
-                    bodyWidthRatio={0.4}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="text-sm text-neutral-400">
-                Aún no hay velas para esta temporalidad. Espera unos segundos…
-              </div>
-            )}
-          </div>
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <div className="text-xs text-neutral-400">Gráfico de velas</div>
+          <div className="text-lg font-semibold">{selected.name}</div>
+          <div className="text-xs text-neutral-500">{selected.description}</div>
+        </div>
+        <button
+          onClick={() => setChartFor(null)}
+          className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700"
+        >
+          Cerrar
+        </button>
+      </div>
+
+      {(derivedCandles?.length ?? 0) > 0 ? (
+        <ZoomableCandleWrapper
+          candles={derivedCandles}
+          chartFor={chartFor}
+          tf={tf}
+        />
+      ) : (
+        <div className="text-sm text-neutral-400">
+          Aún no hay velas para esta temporalidad. Espera unos segundos…
         </div>
       )}
+    </div>
+  </div>
+)}
+
 
       {/* ==== Modal de Login ==== */}
       {loginOpen && (
