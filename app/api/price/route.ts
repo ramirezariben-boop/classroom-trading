@@ -143,6 +143,29 @@ const TIMEFRAMES = [
 
 // ===== Gestión de velas activas =====
 async function updateActiveCandle(id: string, price: number, now: number) {
+
+if (!active) {
+  // 🩹 Si no hay vela activa, intenta recuperar la última desde la DB
+  const last = await prisma.candle.findFirst({
+    where: { valueId: id, timeframe: label },
+    orderBy: { time: "desc" },
+  });
+
+  const base = last ?? { open: price, high: price, low: price, close: price, time: new Date(now - ms) };
+
+  active = {
+    open: base.close,
+    high: price,
+    low: price,
+    close: price,
+    startedAt: Math.floor(now / ms) * ms,
+  };
+
+  state.activeCandles.set(key, active);
+  continue;
+}
+
+
   for (const { label, ms } of TIMEFRAMES) {
     if (id === "dsgmxp" && label === "5m") {
       console.log(`⚙️ updateActiveCandle ejecutado para ${id} (${label}) a ${new Date(now).toLocaleTimeString()}`);
@@ -183,18 +206,33 @@ async function updateActiveCandle(id: string, price: number, now: number) {
 
       // 🔹 Crear nueva vela
       try {
-        await prisma.candle.create({
-          data: {
-            valueId: id,
-            timeframe: label,
-            ts: new Date(now),
-            open: candle.open,
-            high: candle.high,
-            low: candle.low,
-            close: candle.close,
-            time: new Date(candle.startedAt),
-          },
-        });
+        await prisma.candle.upsert({
+  where: {
+    valueId_timeframe_time: {
+      valueId: id,
+      timeframe: label,
+      time: new Date(candle.startedAt),
+    },
+  },
+  update: {
+    open: candle.open,
+    high: candle.high,
+    low: candle.low,
+    close: candle.close,
+    ts: new Date(now),
+  },
+  create: {
+    valueId: id,
+    timeframe: label,
+    ts: new Date(now),
+    open: candle.open,
+    high: candle.high,
+    low: candle.low,
+    close: candle.close,
+    time: new Date(candle.startedAt),
+  },
+});
+
         console.log(`💾 Nueva vela ${id} (${label}) ${new Date(candle.startedAt).toLocaleString()}`);
       } catch (err: any) {
         if (err.code === "P2002") {
