@@ -56,13 +56,14 @@ const Faktoren = () => {
   }, []);
 
   // === Datos actuales (última semana) ===
-  const metrics: Metric[] = [
-    { name: "Participaciones", saturday: 2.4, sunday: 2.7 },
-    { name: "Tareas", saturday: 8.7, sunday: 9.0 },
-    { name: "Calificaciones", saturday: 89, sunday: 90 },
-    { name: "Tareas extra", saturday: 1.6, sunday: 2.0 },
-    { name: "Asistencia", saturday: 89.18, sunday: 81.29 },
-  ];
+const metrics: Metric[] = [
+  { name: "Participaciones", saturday: 1.24, sunday: 3.02 },
+  { name: "Tareas", saturday: 88.43, sunday: 95.74 },
+  { name: "Calificaciones", saturday: 89, sunday: 90 },
+  { name: "Tareas extra", saturday: 0.96, sunday: 2.89 },
+  { name: "Asistencia", saturday: 67.85, sunday: 80.25 },
+];
+
 
   const ratioCanal = 3.0;
 

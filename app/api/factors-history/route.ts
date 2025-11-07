@@ -12,6 +12,10 @@ export async function GET() {
         { fecha: "13 sep", valor: 85.67 },
         { fecha: "20 sep", valor: 87.25 },
         { fecha: "27 sep", valor: 89.18 },
+        // 🆕 Nuevas semanas
+        { fecha: "18 oct", valor: 74.54 },
+        { fecha: "25 oct", valor: 76.36 },
+        { fecha: "1 nov", valor: 67.85 },
       ],
       domingo: [
         { fecha: "17 ago", valor: 69.05 },
@@ -21,16 +25,29 @@ export async function GET() {
         { fecha: "14 sep", valor: 81.28 },
         { fecha: "21 sep", valor: 81.29 },
         { fecha: "28 sep", valor: NaN },
+        // 🆕 Nuevas semanas
+        { fecha: "19 oct", valor: 78.01 },
+        { fecha: "26 oct", valor: 82.96 },
+        { fecha: "2 nov", valor: 80.25 },
       ],
     },
+
     calificaciones: {
       sabado: [
         { fecha: "6 sep", valor: 85.78 },
         { fecha: "4 oct", valor: 76.76 },
+        // 🆕 Nuevas semanas (basadas en % de tareas)
+        { fecha: "18 oct", valor: 85.98 },
+        { fecha: "25 oct", valor: 86.49 },
+        { fecha: "1 nov", valor: 88.43 },
       ],
       domingo: [
         { fecha: "7 sep", valor: 81.33 },
         { fecha: "5 oct", valor: 85.27 },
+        // 🆕 Nuevas semanas (basadas en % de tareas)
+        { fecha: "19 oct", valor: 97.2 },
+        { fecha: "26 oct", valor: 91.18 },
+        { fecha: "2 nov", valor: 95.74 },
       ],
     },
   };

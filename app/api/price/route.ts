@@ -297,7 +297,7 @@ export async function GET(req: Request) {
       state.lastPrices.set(id, next);
       void updateActiveCandle(id, next, tNow);
     }
-  }
+  }	
 
   state.lastTick = now;
 
