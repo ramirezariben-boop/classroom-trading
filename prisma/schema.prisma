@@ -26,6 +26,7 @@ model Value {
   name        String
   categoryId  String?
   description String?
+  price       Float?
   positions   Position[]
 }
 

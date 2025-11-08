@@ -331,80 +331,40 @@ useEffect(() => {
       } catch {
         // sin log si no existe
       }
-      if (!stop) setTimeout(loadFactors, 10000);
+      
     }
     loadFactors();
     return () => { stop = true; };
   }, []);
 
-// === Polling de precios (visual cada 7 s) ===
+// === Cargar precios una sola vez (sin loop constante) ===
 useEffect(() => {
   if (!mounted) return;
-  let timer: any;
-  const POLL_MS = 7000;
 
   async function tick() {
     try {
       const res = await fetch("/api/price-tick", { cache: "no-store" });
       if (!res.ok) return;
-      const data = (await res.json()) as {
-        prices: Record<string, number>;
-        ts: number;
-      };
-	// 🔹 Log de depuración
-console.log("💫 Tick recibido:", new Date(data.ts).toLocaleTimeString(), "→", Object.keys(data.prices).length, "precios");
-      const now = data.ts || Date.now();
+      const data = await res.json();
+      console.log("💫 Tick recibido:", new Date(data.ts).toLocaleTimeString());
 
-      // 🔹 Actualiza precios visibles en tarjetas
+      const now = data.ts || Date.now();
       setValues((prev) => {
         const next = { ...prev };
         for (const id of Object.keys(next)) {
           const old = next[id];
           const p = data.prices[id] ?? old.price;
           const changePct = +(((p - old.price) / Math.max(1e-9, old.price)) * 100).toFixed(2);
-          next[id] = { ...old, price: p, changePct, updatedAt: now + Math.random() * 0.001 };
+          next[id] = { ...old, price: p, changePct, updatedAt: now };
         }
         return next;
       });
-
-      // 🔹 Actualiza vela en curso SOLO si hay gráfico abierto
-      if (!chartFor) return;
-
-console.log("🧭 Diagnóstico:",
-  "chartFor =", chartFor,
-  "| keys =", Object.keys(data.prices)
-);
-
-setHistory((prev) => {
-  const next = { ...prev };
-  const arr = next[chartFor];
-  const price = data.prices[chartFor];
-  if (!arr || arr.length === 0 || !price) return prev;
-
-  const last = arr[arr.length - 1];
-  const newLast = {
-    ...last,
-    high: Math.max(last.high, price),
-    low: Math.min(last.low, price),
-    close: price,
-    time: Date.now(),
-  };
-
-  next[chartFor] = [...arr.slice(0, -1), newLast];
-  console.log(`📊 Vela actualizada para ${chartFor}:`, price.toFixed(2));
-  return next;
-});
-
-
-    } catch (e) {
-      // no log
-    }
+    } catch {}
   }
 
-  tick();
-  timer = setInterval(tick, POLL_MS);
-  return () => clearInterval(timer);
-}, [mounted, chartFor]);
+  tick(); // solo una vez
+}, [mounted]);
+
 
 
 const [top5, setTop5] = useState<{ id:number; user:string; points:number }[]>([]);
@@ -475,10 +435,11 @@ try {
 
   }
 
-  // 🔁 Carga inicial + refresco cada 30 s
-  loadAllCandles();
-  const interval = setInterval(loadAllCandles, 30000);
-  return () => clearInterval(interval);
+
+  // Solo cargamos las velas al inicio, sin intervalo
+loadAllCandles();
+
+  
 }, []);
 
 
