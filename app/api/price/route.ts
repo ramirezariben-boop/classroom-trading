@@ -5,6 +5,28 @@ import fsp from "fs/promises";
 import path from "path";
 import { prisma } from "@/app/lib/prisma";
 
+// ===== Cola de escritura para evitar saturar Prisma =====
+const writeQueue: (() => Promise<void>)[] = [];
+let writing = false;
+
+async function enqueueWrite(fn: () => Promise<void>) {
+  writeQueue.push(fn);
+  if (!writing) {
+    writing = true;
+    while (writeQueue.length > 0) {
+      const task = writeQueue.shift();
+      if (task) {
+        try {
+          await task();
+        } catch (err) {
+          console.error("❌ Error en escritura Prisma:", err);
+        }
+      }
+    }
+    writing = false;
+  }
+}
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -19,7 +41,6 @@ const DEFAULTS: Record<string, number> = {
 };
 
 // ===== Tipos =====
-type Candle = { time: number; open: number; high: number; low: number; close: number };
 type Signals = {
   groupAvg: number;
   workers: Record<string, number>;
@@ -51,7 +72,6 @@ const state: State = {
   lastTick: 0,
 };
 
-
 // ===== Utils =====
 function randn() {
   let u = 0, v = 0;
@@ -63,7 +83,6 @@ function randn() {
 function isVercelRuntime() {
   return !!process.env.VERCEL || !!process.env.NEXT_RUNTIME;
 }
-
 
 async function readJsonSafe<T = any>(...parts: string[]): Promise<T | null> {
   try {
@@ -152,7 +171,6 @@ async function updateActiveCandle(id: string, price: number, now: number) {
     let active = state.activeCandles.get(key);
     const currentBucket = Math.floor(now / ms) * ms;
 
-    // 🩹 Si no hay vela activa, intenta recuperar la última desde la DB
     if (!active) {
       const last = await prisma.candle.findFirst({
         where: { valueId: id, timeframe: label },
@@ -172,7 +190,7 @@ async function updateActiveCandle(id: string, price: number, now: number) {
         high: price,
         low: price,
         close: price,
-        startedAt: Math.floor(now / ms) * ms,
+        startedAt: currentBucket,
       };
 
       state.activeCandles.set(key, active);
@@ -184,44 +202,42 @@ async function updateActiveCandle(id: string, price: number, now: number) {
     if (price > active.high) active.high = price;
     if (price < active.low) active.low = price;
 
-// 🔸 Guardar progreso parcial si la vela ya tiene más de 30 segundos
-if (now - active.startedAt > 30_000) {
-  await prisma.candle.upsert({
-    where: {
-      valueId_timeframe_time: {
-        valueId: id,
-        timeframe: label,
-        time: new Date(active.startedAt),
-      },
-    },
-    update: {
-      open: active.open,
-      high: active.high,
-      low: active.low,
-      close: active.close,
-      ts: new Date(now),
-    },
-    create: {
-      valueId: id,
-      timeframe: label,
-      ts: new Date(now),
-      open: active.open,
-      high: active.high,
-      low: active.low,
-      close: active.close,
-      time: new Date(active.startedAt),
-    },
-  });
-}
+    // 🔸 Guardar progreso parcial si la vela ya tiene más de 30s
+    if (now - active.startedAt > 30_000) {
+      enqueueWrite(() =>
+        prisma.candle.upsert({
+          where: {
+            valueId_timeframe_time: {
+              valueId: id,
+              timeframe: label,
+              time: new Date(active.startedAt),
+            },
+          },
+          update: {
+            open: active.open,
+            high: active.high,
+            low: active.low,
+            close: active.close,
+            ts: new Date(now),
+          },
+          create: {
+            valueId: id,
+            timeframe: label,
+            ts: new Date(now),
+            open: active.open,
+            high: active.high,
+            low: active.low,
+            close: active.close,
+            time: new Date(active.startedAt),
+          },
+        })
+      );
+    }
 
-
-// 🕯️ En entorno serverless, forzar cierre inmediato de vela
-const forceClose = isVercelRuntime();
-if (forceClose || now - active.startedAt >= ms) {
-
+    const forceClose = isVercelRuntime();
+    if (forceClose || now - active.startedAt >= ms) {
       const candle = { ...active };
 
-      // Mantener máximo 1500 velas
       const count = await prisma.candle.count({ where: { valueId: id, timeframe: label } });
       if (count >= 1500) {
         const oldest = await prisma.candle.findFirst({
@@ -236,47 +252,46 @@ if (forceClose || now - active.startedAt >= ms) {
         }
       }
 
-      // Guardar o actualizar la vela
-      await prisma.candle.upsert({
-        where: {
-          valueId_timeframe_time: {
+      enqueueWrite(() =>
+        prisma.candle.upsert({
+          where: {
+            valueId_timeframe_time: {
+              valueId: id,
+              timeframe: label,
+              time: new Date(candle.startedAt),
+            },
+          },
+          update: {
+            open: candle.open,
+            high: candle.high,
+            low: candle.low,
+            close: candle.close,
+            ts: new Date(now),
+          },
+          create: {
             valueId: id,
             timeframe: label,
+            ts: new Date(now),
+            open: candle.open,
+            high: candle.high,
+            low: candle.low,
+            close: candle.close,
             time: new Date(candle.startedAt),
           },
-        },
-        update: {
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
-          ts: new Date(now),
-        },
-        create: {
-          valueId: id,
-          timeframe: label,
-          ts: new Date(now),
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
-          time: new Date(candle.startedAt),
-        },
+        })
+      );
+
+      // 🆕 Reiniciar la siguiente vela sin gap (continuidad real)
+      state.activeCandles.set(key, {
+        open: candle.close,
+        high: candle.close,
+        low: candle.close,
+        close: candle.close,
+        startedAt: currentBucket,
       });
-
-      // Reiniciar nueva vela sin gap: open = close de la anterior
-state.activeCandles.set(key, {
-  open: candle.close,  // << continuidad
-  high: candle.close,
-  low: candle.close,
-  close: candle.close,
-  startedAt: currentBucket,
-});
-
     }
   }
 }
-
 
 // ===== Handler principal =====
 export async function GET(req: Request) {
@@ -316,12 +331,15 @@ export async function GET(req: Request) {
   if (state.lastTick === 0) state.lastTick = now;
 
   const steps = Math.max(1, Math.floor((now - state.lastTick) / TICK_MS));
+  const startTick = state.lastTick || now - TICK_MS;
   const k = 0.25;
   const sigma = VOLATILITY * 0.3;
   const stepCap = 0.02;
 
+  // 🔹 Procesar cada tick perdido con su timestamp real y bucket correspondiente
   for (let s = 0; s < steps; s++) {
-    const tNow = Date.now();
+    const tNow = startTick + s * TICK_MS;
+
     for (const [id, baseDefault] of Object.entries(DEFAULTS)) {
       const mu = state.lastBaseline.get(id) ?? baseDefault;
       const prev = state.lastPrices.get(id) ?? mu;
@@ -333,9 +351,12 @@ export async function GET(req: Request) {
       next = Math.min(bandHi, Math.max(bandLo, next));
       next = +(next.toFixed(mu < 2 ? 4 : 2));
       state.lastPrices.set(id, next);
-      void updateActiveCandle(id, next, tNow);
+
+      // 🧭 FIX: usar bucket real según el tiempo del tick, no el "now" global
+      const bucketNow = Math.floor(tNow / (5 * 60_000)) * (5 * 60_000);
+      await updateActiveCandle(id, next, bucketNow);
     }
-  }	
+  }
 
   state.lastTick = now;
 
