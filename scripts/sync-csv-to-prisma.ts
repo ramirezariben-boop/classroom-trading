@@ -5,7 +5,7 @@ import { parse } from "csv-parse/sync";
 async function main() {
   const filePath = "data/users_utf8.csv";
   let csvContent = fs.readFileSync(filePath, "utf8");
-  csvContent = csvContent.replace(/^\uFEFF/, ""); // 💥 elimina el BOM
+  csvContent = csvContent.replace(/^\uFEFF/, ""); // elimina BOM
 
   const rows = parse(csvContent, {
     columns: true,
@@ -19,26 +19,27 @@ async function main() {
   let updated = 0;
 
   for (const row of rows) {
-    // Asegura que funcione aunque el encabezado tuviera BOM
     const id = Number(row.id ?? row["﻿id"]);
     if (!id || Number.isNaN(id)) continue;
 
     const data = {
       name: String(row.name ?? "").trim(),
-      day: String(row.day ?? "").trim(),
-      user: String(row.user ?? "").trim(),
-      nip: String(row.password ?? "").trim(),
-      points: Number(row.points ?? 0),
+      day: String(row.day ?? "").trim() || null,
+      user: String(row.user ?? "").trim() || null,
+      password: String(row.password ?? "").trim(), // ✅ campo correcto
+      nip: String(row.nip ?? "").trim() || null,   // ✅ separado de password
+      points: Number(row.points ?? 0),             // ✅ puntos reales
     };
 
-    const existing = await prisma.user.findUnique({ where: { id } });
-    if (existing) {
-      await prisma.user.update({ where: { id }, data });
-      updated++;
-    } else {
-      await prisma.user.create({ data: { id, ...data } });
-      created++;
-    }
+    await prisma.user.upsert({
+      where: { id },
+      update: data,
+      create: { id, ...data },
+    });
+
+    const exists = await prisma.user.findUnique({ where: { id } });
+    if (exists) updated++;
+    else created++;
   }
 
   console.log("✅ Sincronización completada");
