@@ -138,3 +138,6 @@ export async function POST(req: Request) {
     );
   }
 }
+
+// 🧩 Verificado manualmente 08-nov-2025
+
