@@ -16,10 +16,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
     const decoded = jwt.verify(cookie.value, JWT_SECRET) as { id: number; name: string };
-    const { toUserId, amount, concept } = await req.json();
 
-    if (!toUserId || !amount || !concept)
-      return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
+    // 🧮 Conversión y validación de entrada
+    let { toUserId, amount, concept } = await req.json();
+    toUserId = Number(toUserId);
+    const amt = parseFloat(amount);
+
+    // 🧩 Validaciones
+    if (!toUserId || isNaN(amt) || !concept)
+      return NextResponse.json({ error: "Datos incompletos o inválidos" }, { status: 400 });
+
+    if (amt <= 0)
+      return NextResponse.json({ error: "Monto inválido" }, { status: 400 });
+
+    // 🧮 Validación de decimales (máx. 2)
+    if (!/^\d+(\.\d{1,2})?$/.test(String(amount)))
+      return NextResponse.json({ error: "Solo se permiten hasta 2 decimales" }, { status: 400 });
 
     const sender = await prisma.user.findUnique({ where: { id: decoded.id } });
     const receiver = await prisma.user.findUnique({ where: { id: toUserId } });
@@ -27,8 +39,6 @@ export async function POST(req: Request) {
     if (!sender || !receiver)
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
-    const amt = Number(amount);
-    if (amt <= 0) return NextResponse.json({ error: "Monto inválido" }, { status: 400 });
     if (sender.points < amt)
       return NextResponse.json({ error: "Fondos insuficientes" }, { status: 400 });
 
@@ -43,11 +53,19 @@ export async function POST(req: Request) {
         where: { id: receiver.id },
         data: { points: { increment: amt } },
       }),
+      // 👇 Redondea solo para registro histórico de Transfer
+      prisma.transfer.create({
+        data: {
+          fromId: sender.id,
+          toId: receiver.id,
+          amount: Math.round(amt),
+        },
+      }),
       prisma.tx.create({
         data: {
           userId: sender.id,
           type: "TRANSFER_OUT",
-          deltaPts: -amt,
+          deltaPts: -amt, // conserva decimales exactos
           note: `→ ${receiver.name} (${receiver.id}) · ${concept}`,
           ts,
         },
@@ -64,8 +82,11 @@ export async function POST(req: Request) {
     ]);
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
+  } catch (err: any) {
     console.error("❌ Error en /api/transfer:", err);
-    return NextResponse.json({ error: "Error en el servidor" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || String(err) },
+      { status: 500 }
+    );
   }
 }

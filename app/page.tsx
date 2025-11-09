@@ -97,40 +97,131 @@ function ZoomableCandleWrapper({
   candles,
   chartFor,
   tf,
-  setPortfolioSummary,
 }: {
-  candles: any[];
+  candles: Candle[];
   chartFor: string;
   tf: { id: string };
-  setPortfolioSummary: React.Dispatch<
-    React.SetStateAction<{ invested: number; profit: number; total: number } | null>
-  >;
 }) {
   const [visibleCount, setVisibleCount] = useState(16);
-  const [scrollOffset, setScrollOffset] = useState(0);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
 
+  // 🎢 Cálculo de velas visibles
+  const visibleCandles = useMemo(() => {
+    if (!candles || candles.length === 0) return [];
+    return candles.slice(-visibleCount);
+  }, [candles, visibleCount]);
 
-  async function refreshPortfolio() {
-    const res = await fetch("/api/portfolio");
-    const data = await res.json();
-    setPortfolioSummary({
-      invested: data.invested,
-      profit: data.profit,
-      total: data.total,
-    });
+  // 📈 Eje Y con margen dinámico (sin tocar el tope)
+  const [yMin, yMax] = useMemo(() => {
+    if (!visibleCandles.length) return [0, 1];
+    const lows = visibleCandles.map((c) => c.low);
+    const highs = visibleCandles.map((c) => c.high);
+    const min = Math.min(...lows);
+    const max = Math.max(...highs);
+    const padding = (max - min) * 0.15; // margen de 15% arriba y abajo
+    return [min - padding, max + padding];
+  }, [visibleCandles]);
+
+  // 🖱️ Arrastre horizontal (click y mover)
+  const dragging = React.useRef(false);
+  const lastX = React.useRef(0);
+
+  function handleMouseDown(e: React.MouseEvent) {
+    dragging.current = true;
+    lastX.current = e.clientX;
   }
 
+  function handleMouseUp() {
+    dragging.current = false;
+  }
+
+  function handleMouseMove(e: React.MouseEvent) {
+    if (!dragging.current || !containerRef.current) return;
+    const delta = e.clientX - lastX.current;
+    containerRef.current.scrollLeft -= delta;
+    lastX.current = e.clientX;
+  }
+
+  // 🧩 Zoom con la rueda
   useEffect(() => {
-    refreshPortfolio();
+    const el = containerRef.current;
+    if (!el) return;
+    const wheelHandler = (e: WheelEvent) => {
+      if (e.ctrlKey) return;
+      e.preventDefault();
+      if (e.deltaY > 0) {
+        setVisibleCount((v) => Math.min(128, v * 1.5)); // zoom out
+      } else {
+        setVisibleCount((v) => Math.max(4, Math.floor(v / 1.5))); // zoom in
+      }
+    };
+    el.addEventListener("wheel", wheelHandler, { passive: false });
+    return () => el.removeEventListener("wheel", wheelHandler);
   }, []);
 
+  // 🧱 Render
   return (
-    <div ref={containerRef}>
-      <CandleChart candles={candles} />
+    <div className="relative" style={{ height: 300, overflow: "hidden" }}>
+      {/* Contenedor scrollable */}
+      <div
+        ref={containerRef}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onMouseMove={handleMouseMove}
+        className="select-none cursor-grab active:cursor-grabbing h-full"
+        style={{
+          overflowX: "scroll",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        }}
+      >
+        <style>{`div::-webkit-scrollbar { display: none; }`}</style>
+
+        <div
+          className="transition-all duration-300 h-full"
+          style={{
+            minWidth: `${Math.max(900, visibleCandles.length * 8)}px`,
+            marginLeft: "48px", // espacio para eje Y fijo
+          }}
+        >
+          <div style={{ height: 300 }}>
+            <CandleChart
+              key={chartFor + tf.id + visibleCount}
+              candles={visibleCandles}
+              height={300}
+              xTicks={6}
+              yTicks={4}
+              bodyWidthRatio={0.4}
+              yMin={yMin}
+              yMax={yMax}
+              highlightLast={true}
+              showYAxis={false}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 🧮 Eje Y fijo y dinámico */}
+      <div
+        className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-xs text-neutral-400 pr-1 border-r border-neutral-800 bg-neutral-950"
+        style={{ width: "48px" }}
+      >
+        {[0, 1, 2, 3, 4].map((i) => {
+          const y = yMax - ((yMax - yMin) * i) / 4;
+          return (
+            <div key={i} className="text-right pr-1">
+              {y.toFixed(2)}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
+
+
+
 
 // ==== Componente principal ====
 export default function Page() {
@@ -1297,14 +1388,33 @@ useEffect(() => {
                 onChange={(e) => setTransferTo(e.target.value)}
                 className="bg-neutral-800 rounded-lg px-2 py-1"
               />
-              <input
-                type="number"
-                min={1}
-                placeholder="Monto"
-                value={transferAmount}
-                onChange={(e) => setTransferAmount(Number(e.target.value))}
-                className="bg-neutral-800 rounded-lg px-2 py-1"
-              />
+             <input
+  type="text"
+  inputMode="decimal"
+  pattern="^[0-9]+([.,][0-9]{0,2})?$"
+  placeholder="Monto"
+  value={transferAmount}
+  onChange={(e) => {
+    let value = e.target.value;
+
+    // ✅ Permite vacío, enteros o decimales con punto o coma
+    if (value === "" || /^[0-9]+([.,][0-9]{0,2})?$/.test(value)) {
+      // Normaliza internamente a punto (.) para el estado
+      value = value.replace(",", ".");
+      setTransferAmount(value);
+    }
+  }}
+  onBlur={() => {
+    // 🔢 Redondea a 2 decimales al salir del campo
+    const num = parseFloat(String(transferAmount).replace(",", "."));
+    if (!isNaN(num)) setTransferAmount(num.toFixed(2));
+  }}
+  className="bg-neutral-800 rounded-lg px-2 py-1"
+  inputMode="decimal"
+/>
+
+
+
               <input
                 placeholder="Concepto (obligatorio)"
                 value={transferConcept}
@@ -1507,7 +1617,6 @@ useEffect(() => {
   candles={derivedCandles}
   chartFor={chartFor}
   tf={tf}
-  setPortfolioSummary={setPortfolioSummary}
 />
 
   </>
