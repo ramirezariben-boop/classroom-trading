@@ -1668,10 +1668,6 @@ useEffect(() => {
                 Entrar
               </button>
             </div>
-
-            <p className="text-xs text-neutral-500 mt-3">
-              Necesitas tener listas las rutas: /api/login, /api/logout, /api/portfolio, /api/trade, /api/transfer y /api/txs.
-            </p>
           </div>
         </div>
             )}
