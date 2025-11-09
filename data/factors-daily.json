@@ -1,0 +1,13 @@
+{
+  "views24hPct": 3.1,
+  "coeff": {
+    "aktien": 1.2,
+    "materialien": 0.8,
+    "wahrungen": 0.4,
+    "werte": 0.6,
+    "zehntel": 0.3,
+    "guter": 0.2
+  },
+  "note": "Alta participación y envío de tareas el último fin de semana.",
+  "updatedAt": "2025-11-08T00:00:00.000Z"
+}

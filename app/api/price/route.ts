@@ -5,27 +5,6 @@ import fsp from "fs/promises";
 import path from "path";
 import { prisma } from "@/app/lib/prisma";
 
-// ===== Cola de escritura =====
-const writeQueue: (() => Promise<void>)[] = [];
-let writing = false;
-async function enqueueWrite(fn: () => Promise<void>) {
-  writeQueue.push(fn);
-  if (!writing) {
-    writing = true;
-    while (writeQueue.length > 0) {
-      const task = writeQueue.shift();
-      if (task) {
-        try {
-          await task();
-        } catch (err) {
-          console.error("❌ Error en escritura Prisma:", err);
-        }
-      }
-    }
-    writing = false;
-  }
-}
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -55,18 +34,12 @@ type ActiveCandle = { open: number; high: number; low: number; close: number; st
 type State = {
   lastPrices: Map<string, number>;
   activeCandles: Map<string, ActiveCandle>;
-  lastDayKey: string;
-  lastBaseline: Map<string, number>;
-  lastFactorsKey: string;
   lastTick: number;
 };
 
 const state: State = {
   lastPrices: new Map(),
   activeCandles: new Map(),
-  lastDayKey: "",
-  lastBaseline: new Map(),
-  lastFactorsKey: "",
   lastTick: 0,
 };
 
@@ -76,9 +49,6 @@ function randn() {
   while (u === 0) u = Math.random();
   while (v === 0) v = Math.random();
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-}
-function isVercelRuntime() {
-  return !!process.env.VERCEL || !!process.env.NEXT_RUNTIME;
 }
 async function readJsonSafe<T = any>(...parts: string[]): Promise<T | null> {
   try {
@@ -91,27 +61,22 @@ async function readJsonSafe<T = any>(...parts: string[]): Promise<T | null> {
 }
 function loadFactors() {
   try {
-    const filePath = path.join(process.cwd(), "data", "factors.json");
-    const raw = fs.readFileSync(filePath, "utf-8");
+    const raw = fs.readFileSync(path.join(process.cwd(), "data", "factors.json"), "utf8");
     return JSON.parse(raw);
   } catch {
-    return { date: null, volatility: 0.05, basePrices: {}, tickSeconds: 7, candleSeconds: 300 };
+    return { date: null, volatility: 0.05, tickSeconds: 7 };
   }
 }
 
-// ===== Cargar señales =====
+// ===== Señales externas =====
 async function loadSignals(): Promise<Signals> {
   const fromData = await readJsonSafe<Partial<Signals>>("data", "signals.json");
-  if (fromData) return withSignalDefaults(fromData);
+  if (fromData) return withDefaults(fromData);
   const fromPublic = await readJsonSafe<Partial<Signals>>("public", "signals.json");
-  if (fromPublic) return withSignalDefaults(fromPublic);
-  try {
-    const res = await fetch("http://localhost:3000/api/signals", { cache: "no-store" });
-    if (res.ok) return withSignalDefaults(await res.json());
-  } catch {}
-  return withSignalDefaults({});
+  if (fromPublic) return withDefaults(fromPublic);
+  return withDefaults({});
 }
-function withSignalDefaults(s: Partial<Signals>): Signals {
+function withDefaults(s: Partial<Signals>): Signals {
   return {
     groupAvg: s.groupAvg ?? 75,
     workers: s.workers ?? { baumxp: 80, dsgmxp: 70, rftmxp: 85 },
@@ -124,7 +89,7 @@ function withSignalDefaults(s: Partial<Signals>): Signals {
   };
 }
 
-// ===== Inicializar últimos precios desde DB =====
+// ===== Cargar precios iniciales =====
 async function initializeLastPrices() {
   const lastCandles = await prisma.candle.groupBy({
     by: ["valueId"],
@@ -140,9 +105,9 @@ async function initializeLastPrices() {
     if (last) state.lastPrices.set(row.valueId, last.close);
   }
 
-  // Si faltan, usar DEFAULTS
   for (const [id, val] of Object.entries(DEFAULTS))
     if (!state.lastPrices.has(id)) state.lastPrices.set(id, val);
+
   console.log(`✅ Últimos precios cargados: ${state.lastPrices.size}`);
 }
 
@@ -156,129 +121,80 @@ const TIMEFRAMES = [
   { label: "1w", ms: 7 * 24 * 60 * 60_000 },
 ];
 
-// ===== Gestión de velas activas =====
+// ===== Actualización agrupada de velas =====
 async function updateActiveCandle(id: string, price: number, now: number) {
+  const ops = [];
   for (const { label, ms } of TIMEFRAMES) {
     const key = `${id}-${label}`;
     const currentBucket = Math.floor(now / ms) * ms;
-
-    // 🔹 Buscar la última vela guardada en DB si no existe en memoria
     let active = state.activeCandles.get(key);
     if (!active) {
-      const last = await prisma.candle.findFirst({
-        where: { valueId: id, timeframe: label },
-        orderBy: { time: "desc" },
-      });
-
-      if (last) {
-        active = {
-          open: last.close,
-          high: last.close,
-          low: last.close,
-          close: last.close,
-          startedAt: Number(last.time),
-        };
-      } else {
-        active = {
-          open: price,
-          high: price,
-          low: price,
-          close: price,
-          startedAt: currentBucket,
-        };
-      }
+      active = { open: price, high: price, low: price, close: price, startedAt: currentBucket };
       state.activeCandles.set(key, active);
     }
-
-    // 🔸 Si el tiempo actual ya pasó al siguiente bucket, cerrar la vela anterior
     const activeBucket = Math.floor(active.startedAt / ms) * ms;
     if (currentBucket > activeBucket) {
-      const candle = { ...active };
-
-      await prisma.candle.upsert({
-        where: {
-          valueId_timeframe_time: {
-            valueId: id,
-            timeframe: label,
-            time: new Date(candle.startedAt),
-          },
-        },
-        update: {
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
-          ts: new Date(now),
-        },
-        create: {
-          valueId: id,
-          timeframe: label,
-          ts: new Date(now),
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
-          time: new Date(candle.startedAt),
-        },
+      ops.push({
+        valueId: id,
+        timeframe: label,
+        time: new Date(active.startedAt),
+        ts: new Date(now),
+        open: active.open,
+        high: active.high,
+        low: active.low,
+        close: active.close,
       });
-
-      // 🔁 Crear una nueva vela desde el cierre anterior
-      active = {
-        open: candle.close,
-        high: candle.close,
-        low: candle.close,
-        close: candle.close,
-        startedAt: currentBucket,
-      };
+      active = { open: price, high: price, low: price, close: price, startedAt: currentBucket };
       state.activeCandles.set(key, active);
     }
-
-    // 🔹 Actualizar precios dentro de la vela actual
     active.close = price;
     if (price > active.high) active.high = price;
     if (price < active.low) active.low = price;
   }
+  if (ops.length) await prisma.candle.createMany({ data: ops, skipDuplicates: true });
 }
-
 
 // ===== Handler principal =====
 export async function GET(req: Request) {
   const url = new URL(req.url);
+  const mode = url.searchParams.get("mode");
   const key = url.searchParams.get("key");
   const ua = req.headers.get("user-agent")?.toLowerCase() || "";
   const isCron =
     key === process.env.CRON_SECRET ||
     key === "dev" ||
     ua.includes("cron") ||
-    ua.includes("uptime") ||
-    ua.includes("monitor");
+    ua.includes("uptime");
+
+  // === Lectura simple (frontend) ===
+  if (mode === "read") {
+    if (state.lastPrices.size === 0) await initializeLastPrices();
+    const out: Record<string, number> = {};
+    for (const [id, p] of state.lastPrices) out[id] = p;
+    return NextResponse.json({ ok: true, prices: out });
+  }
 
   const now = Date.now();
   const factors = loadFactors();
   const sig = await loadSignals();
-  const VOLATILITY = factors.volatility ?? sig.volatility ?? 0.05;
+  const VOL = factors.volatility ?? sig.volatility ?? 0.05;
   const TICK_MS = (factors.tickSeconds ?? 7) * 1000;
 
-  // Inicializar precios solo la primera vez
   if (state.lastPrices.size === 0) await initializeLastPrices();
 
   const steps = Math.max(1, Math.floor((now - state.lastTick) / TICK_MS));
-  const k = 0.25;
-  const sigma = VOLATILITY * 0.3;
-  const stepCap = 0.02;
 
   for (let s = 0; s < steps; s++) {
     const tNow = now - (steps - 1 - s) * TICK_MS;
-
-    for (const [id, baseDefault] of Object.entries(DEFAULTS)) {
-      const mu = baseDefault;
+    for (const [id, base] of Object.entries(DEFAULTS)) {
+      const mu = base;
       const prev = state.lastPrices.get(id) ?? mu;
-      const drift = k * (mu - prev);
-      const noise = mu * sigma * randn();
-      let next = prev + drift + noise;
-      const bandLo = prev * (1 - stepCap);
-      const bandHi = prev * (1 + stepCap);
-      next = Math.min(bandHi, Math.max(bandLo, next));
+      const variation = randn() * VOL;
+      let next = mu * (1 + variation);
+      const maxDev = VOL;
+      next = Math.min(mu * (1 + maxDev), Math.max(mu * (1 - maxDev), next));
+      const alpha = 0.3;
+      next = prev + alpha * (next - prev);
       next = +(next.toFixed(mu < 2 ? 4 : 2));
       state.lastPrices.set(id, next);
       await updateActiveCandle(id, next, tNow);
@@ -286,10 +202,8 @@ export async function GET(req: Request) {
   }
 
   state.lastTick = now;
+  const out: Record<string, number> = {};
+  for (const [id, p] of state.lastPrices) out[id] = p;
 
-  const PRICES: Record<string, number> = {};
-  for (const [id, p] of state.lastPrices) PRICES[id] = p;
-
-  if (isCron) return NextResponse.json({ ok: true, ts: now });
-  return NextResponse.json({ ok: true, prices: PRICES, ts: now }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ ok: true, prices: out, ts: now }, { headers: { "Cache-Control": "no-store" } });
 }

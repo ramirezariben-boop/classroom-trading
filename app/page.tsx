@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import CandleChart from "../components/CandleChart";
 import Link from "next/link";
 import Faktoren from "@/components/Faktoren";
+import { useToast } from "@/app/hooks/useToast";
 
 // ==== Tipos ====
 export type Category = { id: string; name: string; description: string };
@@ -40,40 +41,40 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: "zehntel", name: "Zehntel", description: "Décimas" },
   { id: "guter", name: "Güter", description: "Mercancías" },
 ];
-
 const DEFAULT_VALUES: Value[] = [
   // Aktien
-  { id: "baumxp", categoryId: "aktien", name: "BAUMXP", description: "Bauunternehmen", price: 100, changePct: 0, updatedAt: 0 },
-  { id: "dsgmxp", categoryId: "aktien", name: "DSGMXP", description: "Aufgabendesign", price: 100, changePct: 0, updatedAt: 0 },
-  { id: "rftmxp", categoryId: "aktien", name: "RFTMXP", description: "Referate", price: 100, changePct: 0, updatedAt: 0 },
+  { id: "baumxp", categoryId: "aktien", name: "BAUMXP", description: "Bauunternehmen", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "dsgmxp", categoryId: "aktien", name: "DSGMXP", description: "Aufgabendesign", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "rftmxp", categoryId: "aktien", name: "RFTMXP", description: "Referate", price: 0, changePct: 0, updatedAt: 0 },
 
   // Materialien
-  { id: "krimxp", categoryId: "materialien", name: "KRIMXP", description: "Krimis", price: 40, changePct: 0, updatedAt: 0 },
-  { id: "grmmxp", categoryId: "materialien", name: "GRMMXP", description: "Grammatik", price: 40, changePct: 0, updatedAt: 0 },
-  { id: "litmxp", categoryId: "materialien", name: "LITMXP", description: "Literatur", price: 50, changePct: 0, updatedAt: 0 },
-  { id: "hormxp", categoryId: "materialien", name: "HORMXP", description: "Hörverstehen", price: 55, changePct: 0, updatedAt: 0 },
+  { id: "krimxp", categoryId: "materialien", name: "KRIMXP", description: "Krimis", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "grmmxp", categoryId: "materialien", name: "GRMMXP", description: "Grammatik", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "litmxp", categoryId: "materialien", name: "LITMXP", description: "Literatur", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "hormxp", categoryId: "materialien", name: "HORMXP", description: "Hörverstehen", price: 0, changePct: 0, updatedAt: 0 },
 
   // Währungen
-  { id: "sonmxp", categoryId: "wahrungen", name: "SONMXP", description: "Valor de los puntos del domingo", price: 1, changePct: 0, updatedAt: 0 },
-  { id: "sammxp", categoryId: "wahrungen", name: "SAMMXP", description: "Valor de los puntos del sábado", price: 1, changePct: 0, updatedAt: 0 },
+  { id: "sonmxp", categoryId: "wahrungen", name: "SONMXP", description: "Valor de los puntos del domingo", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "sammxp", categoryId: "wahrungen", name: "SAMMXP", description: "Valor de los puntos del sábado", price: 0, changePct: 0, updatedAt: 0 },
 
   // Werte
-  { id: "wgrmxp", categoryId: "werte", name: "WGRMXP", description: "Valor de los puntos del domingo", price: 1, changePct: 0, updatedAt: 0 },
-  { id: "waumxp", categoryId: "werte", name: "WAUMXP", description: "Valor de los puntos del sábado", price: 1, changePct: 0, updatedAt: 0 },
-  { id: "wbtmxp", categoryId: "werte", name: "WBTMXP", description: "Valor de los puntos del domingo", price: 1, changePct: 0, updatedAt: 0 },
-  { id: "wxhmxp", categoryId: "werte", name: "WXHMXP", description: "Valor de los puntos del sábado", price: 1, changePct: 0, updatedAt: 0 },
+  { id: "wgrmxp", categoryId: "werte", name: "WGRMXP", description: "Valor de los puntos del domingo", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "waumxp", categoryId: "werte", name: "WAUMXP", description: "Valor de los puntos del sábado", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "wbtmxp", categoryId: "werte", name: "WBTMXP", description: "Valor de los puntos del domingo", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "wxhmxp", categoryId: "werte", name: "WXHMXP", description: "Valor de los puntos del sábado", price: 0, changePct: 0, updatedAt: 0 },
 
   // Zehntel
-  { id: "zhnmxp", categoryId: "zehntel", name: "ZHNMXP", description: "Valor de la décima", price: 12, changePct: 0, updatedAt: 0 },
-  { id: "anlmxp", categoryId: "zehntel", name: "ANLMXP", description: "Bonos", price: 1, changePct: 0, updatedAt: 0 },
+  { id: "zhnmxp", categoryId: "zehntel", name: "ZHNMXP", description: "Valor de la décima", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "anlmxp", categoryId: "zehntel", name: "ANLMXP", description: "Bonos", price: 0, changePct: 0, updatedAt: 0 },
 
   // Güter
-  { id: "gzehntel", categoryId: "guter", name: "Zehntel", description: "Décima", price: 12, changePct: 0, updatedAt: 0 },
-  { id: "gkrimi", categoryId: "guter", name: "Krimi", description: "Krimi", price: 40, changePct: 0, updatedAt: 0 },
-  { id: "ggramm", categoryId: "guter", name: "Grammatik", description: "Grammatik", price: 40, changePct: 0, updatedAt: 0 },
-  { id: "glit", categoryId: "guter", name: "Literatur", description: "Literatur", price: 50, changePct: 0, updatedAt: 0 },
-  { id: "ghor", categoryId: "guter", name: "Hörverstehen", description: "Hörverstehen", price: 55, changePct: 0, updatedAt: 0 },
+  { id: "gzehntel", categoryId: "guter", name: "Zehntel", description: "Décima", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "gkrimi", categoryId: "guter", name: "Krimi", description: "Krimi", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "ggramm", categoryId: "guter", name: "Grammatik", description: "Grammatik", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "glit", categoryId: "guter", name: "Literatur", description: "Literatur", price: 0, changePct: 0, updatedAt: 0 },
+  { id: "ghor", categoryId: "guter", name: "Hörverstehen", description: "Hörverstehen", price: 0, changePct: 0, updatedAt: 0 },
 ];
+
 
 // ==== Temporalidades ====
 type Timeframe = { id: string; label: string; candleMs: number };
@@ -91,128 +92,58 @@ const TIMEFRAMES: Timeframe[] = [
   { id: "1w", label: "1 S", candleMs: 1 * W },
 ];
 
+// 📊 Componente gráfico
 function ZoomableCandleWrapper({
   candles,
   chartFor,
   tf,
+  setPortfolioSummary,
 }: {
-  candles: Candle[];
+  candles: any[];
   chartFor: string;
   tf: { id: string };
+  setPortfolioSummary: React.Dispatch<
+    React.SetStateAction<{ invested: number; profit: number; total: number } | null>
+  >;
 }) {
   const [visibleCount, setVisibleCount] = useState(16);
   const [scrollOffset, setScrollOffset] = useState(0);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
-  const [portfolioSummary, setPortfolioSummary] = useState<{
-  invested: number;
-  profit: number;
-  total: number;
-} | null>(null);
 
 
-  // 🔍 Zoom con la rueda
-  function handleWheel(e: React.WheelEvent) {
-    e.preventDefault();
-    if (e.deltaY > 0) {
-      setVisibleCount((v) => Math.min(128, v * 2));
-    } else {
-      setVisibleCount((v) => Math.max(4, Math.floor(v / 2)));
-    }
+  async function refreshPortfolio() {
+    const res = await fetch("/api/portfolio");
+    const data = await res.json();
+    setPortfolioSummary({
+      invested: data.invested,
+      profit: data.profit,
+      total: data.total,
+    });
   }
 
-  // 🎢 Cálculo de velas visibles
-  const visibleCandles = useMemo(() => {
-    const start = Math.max(0, candles.length - visibleCount - scrollOffset);
-    const end = Math.max(0, candles.length - scrollOffset);
-    return candles.slice(start, end);
-  }, [candles, visibleCount, scrollOffset]);
-
-  // 📈 Eje Y dinámico
-  const [yMin, yMax] = useMemo(() => {
-    if (!visibleCandles.length) return [0, 1];
-    const lows = visibleCandles.map((c) => c.low);
-    const highs = visibleCandles.map((c) => c.high);
-    const min = Math.min(...lows);
-    const max = Math.max(...highs);
-    const padding = (max - min) * 0.05;
-    return [min - padding, max + padding];
-  }, [visibleCandles]);
-
-  // 🖱️ Arrastre con el mouse
-  const dragging = React.useRef(false);
-  const lastX = React.useRef(0);
-
-  function handleMouseDown(e: React.MouseEvent) {
-    dragging.current = true;
-    lastX.current = e.clientX;
-  }
-
-  function handleMouseUp() {
-    dragging.current = false;
-  }
-
-  function handleMouseMove(e: React.MouseEvent) {
-    if (!dragging.current) return;
-    const delta = e.clientX - lastX.current;
-    if (Math.abs(delta) > 20) {
-      setScrollOffset((prev) =>
-        Math.max(0, Math.min(candles.length - visibleCount, prev + (delta > 0 ? visibleCount / 4 : -visibleCount / 4)))
-      );
-      lastX.current = e.clientX;
-    }
-  }
-
-  // 🧭 Auto-scroll al final cuando se abre
   useEffect(() => {
-    if (!containerRef.current) return;
-    let tries = 0;
-    const tryScroll = () => {
-      const el = containerRef.current!;
-      const scrollable = el.scrollWidth - el.clientWidth;
-      if (scrollable > 10) {
-        el.scrollLeft = el.scrollWidth;
-        console.log("✅ Auto-scroll aplicado:", el.scrollLeft);
-      } else if (tries < 60) {
-        tries++;
-        requestAnimationFrame(tryScroll);
-      }
-    };
-    requestAnimationFrame(tryScroll);
-  }, [chartFor]);
+    refreshPortfolio();
+  }, []);
 
   return (
-    <div
-      ref={containerRef}
-      onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onMouseMove={handleMouseMove}
-      className="overflow-x-auto select-none cursor-grab active:cursor-grabbing"
-    >
-      <div className="min-w-[900px] transition-all duration-300">
-        <CandleChart
-  key={chartFor + tf.id + visibleCount}
-  candles={visibleCandles}
-  height={300}
-  xTicks={6}
-  yTicks={4}
-  bodyWidthRatio={0.4}
-  yMin={yMin}
-  yMax={yMax}
-  highlightLast={true}  // 🔹 ahora siempre true
-/>
-
-      </div>
+    <div ref={containerRef}>
+      <CandleChart candles={candles} />
     </div>
   );
 }
 
-
 // ==== Componente principal ====
 export default function Page() {
+  const { showToast, ToastComponent } = useToast();
+
+  const [portfolioSummary, setPortfolioSummary] = useState<{
+    invested: number;
+    profit: number;
+    total: number;
+  } | null>(null);
+
+  const [loadingPortfolio, setLoadingPortfolio] = useState(true);
   const [mounted, setMounted] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; color: string } | null>(null);
   const [prevMap, setPrevMap] = useState<Record<string, number>>({});
   const [student, setStudent] = useState<{ name: string; points: number }>({ name: "Alumno Demo", points: 0 });
   const [categories] = useState<Category[]>(DEFAULT_CATEGORIES);
@@ -229,6 +160,8 @@ export default function Page() {
   });
   const [trade, setTrade] = useState<{ mode: "BUY" | "SELL"; valueId: string } | null>(null);
   const [qty, setQty] = useState(1);
+  const [pendingBook, setPendingBook] = useState<{ valueId: string; title: string } | null>(null);
+  const [pendingZehntel, setPendingZehntel] = useState<{ valueId: string; qty: number } | null>(null);
   const [chartFor, setChartFor] = useState<string | null>(null);
   const [tf, setTf] = useState<Timeframe>(TIMEFRAMES[0]);
   const selected = chartFor ? values[chartFor] : null;
@@ -277,38 +210,64 @@ useEffect(() => {
 
   useEffect(() => setMounted(true), []);
 
-  // === Recupera sesión activa al recargar la página ===
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/session", { cache: "no-store" });
-        const data = await res.json();
-        if (data.user) setUser(data.user);
-      } catch (e) {
-        console.warn("No se pudo verificar la sesión al iniciar:", e);
-      }
-    })();
-  }, []);
+// === Cargar precios desde el backend (Render actualiza BD) ===
+useEffect(() => {
+  if (!mounted) return;
 
-  // === Valor total del portafolio ===
-  const portfolioSummary = useMemo(() => {
-    if (!user || !positions || Object.keys(positions).length === 0) return null;
+  (async () => {
+    try {
+      const res = await fetch("/api/price?mode=read", { cache: "no-store" });
+      if (!res.ok) throw new Error("No se pudo obtener precios iniciales");
+      const data = await res.json();
 
-    let invested = 0;
-    let currentValue = 0;
-    for (const [id, pos] of Object.entries(positions)) {
-      const value = values[id];
-      if (!value) continue;
-      invested += pos.qty * pos.avgPrice;
-      currentValue += pos.qty * value.price;
+      console.log("💰 Precios recibidos:", data);
+
+      setValues((prev) => {
+        const next = { ...prev };
+        const now = Date.now();
+
+        for (const [id, price] of Object.entries(data.prices || {})) {
+          const old = next[id];
+          const changePct = old?.price
+            ? +(((Number(price) - old.price) / Math.max(1e-9, old.price)) * 100).toFixed(2)
+            : 0;
+
+          next[id] = {
+            ...(old || {}),
+            price: Number(price),
+            changePct,
+            updatedAt: now,
+          };
+        }
+
+        return next;
+      });
+    } catch (err) {
+      console.error("❌ Error al cargar precios:", err);
     }
+  })();
+}, [mounted]);
 
-    const profit = currentValue - invested;
-    const profitPct = invested > 0 ? (profit / invested) * 100 : 0;
-    const totalValue = currentValue + points;
 
-    return { invested, currentValue, profit, profitPct, totalValue };
-  }, [positions, values, points, user]);
+// === Recupera sesión activa al recargar la página ===
+useEffect(() => {
+  (async () => {
+    try {
+      const res = await fetch("/api/session", { cache: "no-store" });
+      const data = await res.json();
+      if (data.user) {
+        setUser(data.user);
+        // ✅ Ahora también actualiza portafolio automáticamente
+        await refreshPortfolio();
+      }
+    } catch (e) {
+      console.warn("No se pudo verificar la sesión al iniciar:", e);
+    }
+  })();
+}, []);
+
+
+ 
 
   // === Resampling (gráfico) ===
   const derivedCandles = useMemo(() => {
@@ -336,36 +295,6 @@ useEffect(() => {
     loadFactors();
     return () => { stop = true; };
   }, []);
-
-// === Cargar precios una sola vez (sin loop constante) ===
-useEffect(() => {
-  if (!mounted) return;
-
-  async function tick() {
-    try {
-      const res = await fetch("/api/price-tick", { cache: "no-store" });
-      if (!res.ok) return;
-      const data = await res.json();
-      console.log("💫 Tick recibido:", new Date(data.ts).toLocaleTimeString());
-
-      const now = data.ts || Date.now();
-      setValues((prev) => {
-        const next = { ...prev };
-        for (const id of Object.keys(next)) {
-          const old = next[id];
-          const p = data.prices[id] ?? old.price;
-          const changePct = +(((p - old.price) / Math.max(1e-9, old.price)) * 100).toFixed(2);
-          next[id] = { ...old, price: p, changePct, updatedAt: now };
-        }
-        return next;
-      });
-    } catch {}
-  }
-
-  tick(); // solo una vez
-}, [mounted]);
-
-
 
 const [top5, setTop5] = useState<{ id:number; user:string; points:number }[]>([]);
 
@@ -523,6 +452,8 @@ loadAllCandles();
 // === Portafolio ===
 async function refreshPortfolio() {
   try {
+    setLoadingPortfolio(true); // ⏳ Mostrar estado de carga
+
     const data = await api<{
       points: number;
       invested: number;
@@ -586,8 +517,11 @@ async function refreshPortfolio() {
     });
   } catch (e) {
     console.error("Error cargando portafolio", e);
+  } finally {
+    setLoadingPortfolio(false); // ✅ Ocultar estado de carga siempre, incluso si falla
   }
 }
+
 
 
   async function fetchTxs(scope: "me" | "all") {
@@ -707,6 +641,62 @@ async function handleClosePosition(valueId: string, price: number) {
     }
   }
 
+// 🔹 Actualiza el resumen global del portafolio completo (sin contar Güter)
+useEffect(() => {
+  if (!positions || Object.keys(positions).length === 0) return;
+
+  let investedTotal = 0;
+  let currentTotal = 0;
+
+  // Recorre todas las posiciones abiertas
+  for (const [id, pos] of Object.entries(positions)) {
+    if (!pos || pos.qty <= 0) continue;
+
+    const cat = pos.categoryId || values[id]?.categoryId;
+
+    // 🚫 Excluir todos los Güter (aunque no tengan categoryId explícito)
+    const isGuter =
+      (cat && cat.toLowerCase() === "guter") ||
+      id.startsWith("g") ||
+      ["gzehntel", "gkrimi", "ggramm", "glit", "ghor"].includes(id);
+
+    if (isGuter) continue;
+
+    const current = values[id]?.price ?? 0;
+    const invested = pos.avgPrice * pos.qty;
+    const currentValue = current * pos.qty;
+
+    investedTotal += invested;
+    currentTotal += currentValue;
+  }
+
+  // Solo cuenta ganancias/pérdidas de inversiones reales
+  const profitTotal = currentTotal - investedTotal;
+
+  // 💰 Total = puntos disponibles + valor actual de inversiones (sin Güter)
+  const total = points + currentTotal;
+
+  setPortfolioSummary((prev) => {
+    if (
+      prev &&
+      prev.invested === investedTotal &&
+      prev.profit === profitTotal &&
+      prev.total === total
+    ) {
+      return prev;
+    }
+    return {
+      invested: investedTotal,
+      profit: profitTotal,
+      total: total,
+    };
+  });
+}, [positions, values, points]);
+
+
+
+
+
   if (!mounted) return null;
 
   function categoryDailyAdjPct(catId: string): number | null {
@@ -801,67 +791,110 @@ async function handleClosePosition(valueId: string, price: number) {
 
 {/* ==== Resumen global del portafolio ==== */}
 {user && (
-  <div className="mb-6 bg-neutral-900 border border-neutral-800 rounded-2xl p-5 max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-    
-    {/* 💰 Puntos disponibles */}
-    <div className="flex flex-col items-center justify-center">
-      <div className="text-sm text-neutral-400">💰 Puntos disponibles</div>
-      <div className="text-xl font-semibold text-white">
-        {fmt.format(points)} MXP
-      </div>
-      <div className="text-xs text-neutral-500 mt-1">(sin invertir)</div>
+  loadingPortfolio ? (
+    <div className="mb-6 bg-neutral-900 border border-neutral-800 rounded-2xl p-5 max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+      {/* Placeholder con shimmer */}
+      {[1, 2, 3, 4].map((i) => (
+        <div
+          key={i}
+          className="flex flex-col items-center justify-center space-y-2"
+        >
+          <div className="h-4 w-24 shimmer"></div>
+          <div className="h-6 w-28 shimmer"></div>
+          <div className="h-3 w-20 shimmer"></div>
+        </div>
+      ))}
     </div>
+  ) : (
+    <div className="mb-6 bg-neutral-900 border border-neutral-800 rounded-2xl p-5 max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
 
-    {/* 📊 Capital invertido */}
-    <div className="flex flex-col items-center justify-center">
-      <div className="text-sm text-neutral-400">📊 Capital invertido</div>
-      <div className="text-xl font-semibold text-amber-300">
-        {fmt.format(portfolioSummary?.invested ?? 0)} MXP
+      {/* 💰 Puntos disponibles */}
+      <div className="flex flex-col items-center justify-center">
+        <div className="text-sm text-neutral-400">💰 Puntos disponibles</div>
+        <div className="text-xl font-semibold text-white">
+          {points !== undefined ? fmt.format(points) : "—"} MXP
+        </div>
+        <div className="text-xs text-neutral-500 mt-1">(sin invertir)</div>
       </div>
-      <div className="text-xs text-neutral-500 mt-1">(actualmente en juego)</div>
+
+      {/* 📊 Capital invertido */}
+      <div className="flex flex-col items-center justify-center">
+        <div className="text-sm text-neutral-400">📊 Capital invertido</div>
+        <div className="text-xl font-semibold text-amber-300">
+          {portfolioSummary ? fmt.format(portfolioSummary.invested) : "—"} MXP
+        </div>
+        <div className="text-xs text-neutral-500 mt-1">(actualmente en juego)</div>
+      </div>
+
+      {/* 📈 Ganancia/pérdida */}
+      <div className="flex flex-col items-center justify-center">
+        <div className="text-sm text-neutral-400">📈 Ganancia / pérdida</div>
+        <div
+          className={
+            "text-xl font-semibold " +
+            ((portfolioSummary?.profit ?? 0) > 0
+              ? "text-emerald-400"
+              : (portfolioSummary?.profit ?? 0) < 0
+              ? "text-red-400"
+              : "text-blue-400")
+          }
+        >
+          {portfolioSummary
+            ? `${portfolioSummary.profit >= 0 ? "+" : ""}${fmt.format(portfolioSummary.profit)} MXP`
+            : "—"}
+        </div>
+        <div className="text-xs text-neutral-500 mt-1">
+          {portfolioSummary
+            ? portfolioSummary.profit > 0
+              ? "Ganando actualmente"
+              : portfolioSummary.profit < 0
+              ? "Perdiendo actualmente"
+              : "Sin variaciones"
+            : "—"}
+        </div>
+      </div>
+
+      {/* 🧾 Puntos totales */}
+      <div className="flex flex-col items-center justify-center">
+        <div className="text-sm text-neutral-400">🧾 Puntos totales</div>
+        <div
+          className={
+            "text-xl font-semibold transition-colors duration-500 " +
+            ((portfolioSummary?.profit ?? 0) > 0
+              ? "text-emerald-400"
+              : (portfolioSummary?.profit ?? 0) < 0
+              ? "text-red-400"
+              : "text-blue-400")
+          }
+        >
+          {portfolioSummary
+            ? `${fmt.format(portfolioSummary.total)} MXP`
+            : "—"}
+        </div>
+        <div className="text-xs mt-1 text-neutral-500">
+          {portfolioSummary
+            ? portfolioSummary.profit > 0
+              ? "Portafolio en ganancia"
+              : portfolioSummary.profit < 0
+              ? "Portafolio en pérdida"
+              : "Sin variaciones"
+            : "—"}
+        </div>
+      </div>
     </div>
-
-    {/* 📈 Ganancia/pérdida */}
-    <div className="flex flex-col items-center justify-center">
-      <div className="text-sm text-neutral-400">📈 Ganancia / pérdida</div>
-      <div
-        className={
-          "text-xl font-semibold " +
-          ((portfolioSummary?.profit ?? 0) >= 0
-            ? "text-emerald-400"
-            : "text-red-400")
-        }
-      >
-        {portfolioSummary?.profit >= 0 ? "+" : ""}
-        {fmt.format(portfolioSummary?.profit ?? 0)} MXP
-      </div>
-      <div className="text-xs text-neutral-500 mt-1">
-        {portfolioSummary?.profit >= 0 ? "Ganando" : "Perdiendo"} actualmente
-      </div>
-    </div>
-
-    {/* 🧾 Puntos totales */}
-    <div className="flex flex-col items-center justify-center">
-      <div className="text-sm text-neutral-400">🧾 Puntos totales</div>
-      <div className="text-xl font-semibold text-blue-400">
-        {fmt.format(
-          (portfolioSummary?.total ??
-            (points + (portfolioSummary?.invested ?? 0) + (portfolioSummary?.profit ?? 0)))
-        )}{" "}
-        MXP
-      </div>
-      <div className="text-xs text-neutral-500 mt-1">(equity total)</div>
-    </div>
-
-  </div>
+  )
 )}
+
 
       {/* ==== Contenido principal ==== */}
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
         {/* ==== Panel izquierdo ==== */}
         <section className="lg:col-span-2 space-y-6">
-          {categories.map((cat) => {
-            const catAdj = categoryDailyAdjPct(cat.id);
+          {categories
+  .filter((c) => c.id !== "guter")
+  .map((cat) => {
+
+    const catAdj = categoryDailyAdjPct(cat.id);
             return (
               <div key={cat.id} className="bg-neutral-900 rounded-2xl p-4 border border-neutral-800">
                 <div className="flex items-center justify-between mb-2">
@@ -878,6 +911,7 @@ async function handleClosePosition(valueId: string, price: number) {
                     </div>
                   )}
                 </div>
+
 
                 <div className="grid sm:grid-cols-2 gap-3">
                   {Object.values(values)
@@ -906,19 +940,24 @@ async function handleClosePosition(valueId: string, price: number) {
                             <div className="text-xs text-neutral-400">{v.description}</div>
                           </div>
                           <div className="text-right">
-                            <div className="text-lg font-bold">{fmt.format(v.price)}</div>
-                            <div className={"text-xs " + (v.changePct >= 0 ? "text-emerald-400" : "text-red-400")}>
-                              {v.changePct >= 0 ? "+" : ""}
-                              {v.changePct}%
-                            </div>
-                          </div>
+  <div className="text-lg font-bold">
+    {v.price > 0 ? fmt.format(v.price) : "—"}
+  </div>
+  {v.price > 0 && (
+    <div className={"text-xs " + (v.changePct >= 0 ? "text-emerald-400" : "text-red-400")}>
+      {v.changePct >= 0 ? "+" : ""}
+      {v.changePct}%
+    </div>
+  )}
+</div>
+
                         </div>
 
                         {/* Info de posesión */}
                         {positions[v.id] && (
                           <div className="mt-2 text-sm">
                             <div className="text-neutral-400">
-                              Posees {positions[v.id].qty} u a {fmt.format(positions[v.id].avgPrice)} MXP c/u
+                              Posees {positions[v.id].qty} unidades a {fmt.format(positions[v.id].avgPrice)} MXP c/u
                             </div>
                             <div
                               className={
@@ -944,34 +983,39 @@ async function handleClosePosition(valueId: string, price: number) {
                             {v.price >= prevMap[v.name] ? "↑" : "↓"}{" "}
                             {(((v.price / prevMap[v.name]) - 1) * 100).toFixed(2)}% vs ayer
                           </div>
+                          
                         )}
 
-                        {/* Botones de acción */}
-                        <div className="flex gap-2 mt-3">
-                          {v.categoryId === "guter" ? (
-                            <button
-                              onClick={() => setTrade({ mode: "BUY", valueId: v.id })}
-                              className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-1 rounded-xl"
-                            >
-                              Comprar
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => setTrade({ mode: "BUY", valueId: v.id })}
-                                className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-1 rounded-xl"
-                              >
-                                Comprar
-                              </button>
-                              <button
-                                onClick={() => setTrade({ mode: "SELL", valueId: v.id })}
-                                className="flex-1 bg-red-600 hover:bg-red-500 py-1 rounded-xl"
-                              >
-                                Vender
-                              </button>
-                            </>
-                          )}
-                        </div>
+                       {/* Botones de acción */}
+<div className="flex gap-2 mt-3">
+  {v.categoryId === "guter" ? (
+    <button
+      onClick={() => {
+        const price = v.price || 1;
+        placeOrder("BUY", v.id, 1); // 🔹 compra 1 unidad fija
+      }}
+      className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-1 rounded-xl"
+    >
+      Adquirir
+    </button>
+  ) : (
+    <>
+      <button
+        onClick={() => setTrade({ mode: "BUY", valueId: v.id })}
+        className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-1 rounded-xl"
+      >
+        Comprar
+      </button>
+      <button
+        onClick={() => setTrade({ mode: "SELL", valueId: v.id })}
+        className="flex-1 bg-red-600 hover:bg-red-500 py-1 rounded-xl"
+      >
+        Vender
+      </button>
+    </>
+  )}
+</div>
+
                       </div>
                     ))}
                 </div>
@@ -979,120 +1023,220 @@ async function handleClosePosition(valueId: string, price: number) {
             );
           })}
 
+{/* ==== Bienes disponibles (Güter) ==== */}
+<div className="bg-neutral-900 rounded-2xl p-5 border border-neutral-800 mt-10">
+  <h2 className="text-lg font-semibold mb-3">🎁 Bienes disponibles (Güter)</h2>
+
+  <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+    {Object.values(values)
+      .filter((v) => v.categoryId === "guter")
+      .map((v) => (
+        <div
+          key={v.id}
+          className="rounded-2xl bg-neutral-950 border border-neutral-800 p-3"
+        >
+          <div className="font-medium">{v.name}</div>
+          <div className="text-xs text-neutral-400 mb-2">{v.description}</div>
+          <div className="text-lg font-semibold mb-2">
+            {fmt.format(v.price)} MXP
+          </div>
+
+{v.name.toLowerCase() === "zehntel" ? (
+  <button
+    onClick={() => setPendingZehntel({ valueId: v.id, qty: 1 })}
+    className="w-full bg-emerald-600 hover:bg-emerald-500 py-1 rounded-xl mt-2"
+  >
+    Adquirir
+  </button>
+) : (
+  <button
+    onClick={() => setPendingBook({ valueId: v.id, title: "" })}
+    className="w-full bg-emerald-600 hover:bg-emerald-500 py-1 rounded-xl mt-2"
+  >
+    Adquirir
+  </button>
+)}
+
+
+
+        </div>
+      ))}
+  </div>
+</div>
+
+
+
 {/* ==== Mis bienes ==== */}
 {user && (
-  <div className="bg-neutral-900 rounded-2xl p-5 border border-neutral-800 mt-8">
-    <h2 className="text-lg font-semibold mb-3">📦 Mis bienes adquiridos</h2>
+  <>
+    {/* 📦 Mis bienes adquiridos */}
+<div className="bg-neutral-900 rounded-2xl p-5 border border-neutral-800 mt-8">
+  <h2 className="text-lg font-semibold mb-3">📦 Mis bienes adquiridos</h2>
 
-    {(() => {
-      const bienes = Object.entries(positions).filter(([id, pos]) => {
-        const val = values[id] || {};
-        return (
-          pos.qty > 0 &&
-          (val.categoryId?.toLowerCase?.() === "guter" ||
-            pos.categoryId?.toLowerCase?.() === "guter")
-        );
-      });
-
-      if (bienes.length === 0) {
-        return (
-          <p className="text-sm text-neutral-400">
-            Aún no has comprado bienes.
-          </p>
-        );
-      }
-
-      const totalBienes = bienes.reduce(
-        (acc, [id, pos]) => acc + pos.qty * (values[id]?.price ?? 0),
-        0
-      );
-
+  {(() => {
+    const bienes = Object.entries(positions).filter(([id, pos]) => {
+      const val = values[id] || {};
       return (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b border-neutral-700 text-neutral-400">
-                <th className="text-left py-2">Bien</th>
-                <th className="text-left py-2">Descripción</th>
-                <th className="text-right py-2">Cantidad</th>
-                <th className="text-right py-2">Precio promedio</th>
-                <th className="text-right py-2">Valor actual</th>
-                <th className="text-right py-2">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-             {bienes.map(([id, pos]) => {
-  const v = values[id] || {};
-  const priceNow = v.price ?? 0;
-  const total = pos.qty * priceNow;
-
-  return (
-    <tr
-      key={id}
-      className="border-b border-neutral-800 hover:bg-neutral-800/50"
-    >
-      <td
-  className="py-2 cursor-pointer text-blue-400 hover:text-blue-300 underline"
-  onClick={() => {
-    setChartFor(id);
-    setCandlesBase((prev) => {
-      if (prev?.[id]?.length) return prev;
-      const p = values[id].price;
-      const now = Date.now();
-      return {
-        ...prev,
-        [id]: [{ time: now, open: p, high: p, low: p, close: p }],
-      };
-    });
-  }}
-  title="Ver gráfico"
->
-  {v.name ?? id}
-</td>
-
-      <td className="py-2 text-neutral-400">
-        {pos.description ?? v.description ?? "—"}
-      </td>
-      <td className="py-2 text-right">{pos.qty}</td>
-      <td className="py-2 text-right">{fmt.format(pos.avgPrice)} MXP</td>
-      <td className="py-2 text-right">{fmt.format(total)} MXP</td>
-<td className="py-2 text-right">
-  <button
-    onClick={() => handleClosePosition(id, v.price ?? 0)}
-    className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded-lg"
-  >
-    Cerrar
-  </button>
-</td>
-
-    </tr>
-  );
-})}
-
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-neutral-700 font-semibold">
-                <td colSpan={4} className="py-2 text-right text-neutral-300">
-                  Total bienes:
-                </td>
-                <td className="py-2 text-right">
-                  {fmt.format(totalBienes)} MXP
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        pos.qty > 0 &&
+        (val.categoryId?.toLowerCase?.() === "guter" ||
+          pos.categoryId?.toLowerCase?.() === "guter")
       );
-    })()}
+    });
 
+    if (bienes.length === 0) {
+      return (
+        <p className="text-sm text-neutral-400">
+          Aún no has comprado bienes.
+        </p>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-neutral-700 text-neutral-400">
+              <th className="text-left py-2">Bien</th>
+              <th className="text-left py-2">Descripción</th>
+              <th className="text-right py-2">Cantidad</th>
+              <th className="text-right py-2">Precio promedio</th>
+              <th className="text-right py-2">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bienes.map(([id, pos]) => {
+              const v = values[id] || {};
+
+              return (
+                <tr
+                  key={id}
+                  className="border-b border-neutral-800 hover:bg-neutral-800/50"
+                >
+                  <td className="py-2 cursor-default text-blue-300 font-medium">
+                    {v.name ?? id}
+                  </td>
+                  <td className="py-2 text-neutral-400">
+                    {pos.description ?? v.description ?? "—"}
+                  </td>
+                  <td className="py-2 text-right">{Math.round(pos.qty)}</td>
+                  <td className="py-2 text-right">
+                    {pos.avgPrice > 0 ? fmt.format(pos.avgPrice) : "—"} MXP
+                  </td>
+                  <td className="py-2 text-right text-emerald-400 text-xs font-medium">
+                    Adquirido
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  })()}
+</div>
+
+
+    {/* 📜 Mis transacciones recientes */}
+<div className="bg-neutral-900 rounded-2xl p-5 border border-neutral-800 mt-10 shadow-lg shadow-blue-900/10">
+  <h2 className="text-lg font-semibold mb-3 text-blue-300 flex items-center gap-2">
+    📜 Mis transacciones recientes
+  </h2>
+
+  {txs.length === 0 ? (
+    <p className="text-sm text-neutral-400">
+      Aún no has realizado operaciones.
+    </p>
+  ) : (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="border-b border-neutral-700 text-neutral-400">
+            <th className="text-left py-2">Tipo</th>
+            <th className="text-left py-2">Valor</th>
+            <th className="text-right py-2">Cantidad</th>
+            <th className="text-right py-2">Δ Puntos</th>
+            <th className="text-right py-2">Fecha</th>
+            <th className="text-right py-2">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {txs
+            .slice(-10)
+            .reverse()
+            .map((t) => {
+              const v = values[t.valueId];
+              const pos = positions[t.valueId];
+              const puedeCerrar =
+                pos?.qty > 0 &&
+                v?.categoryId?.toLowerCase() !== "guter" &&
+                t.type === "BUY";
+
+              return (
+                <tr
+                  key={t.id}
+                  className="border-b border-neutral-800 hover:bg-neutral-800/50"
+                >
+                  <td
+                    className={
+                      "py-2 font-medium " +
+                      (t.type === "BUY"
+                        ? "text-emerald-400"
+                        : t.type === "SELL"
+                        ? "text-red-400"
+                        : "text-neutral-300")
+                    }
+                  >
+                    {t.type}
+                  </td>
+                  <td className="py-2 text-neutral-300">{t.valueId}</td>
+                  <td className="py-2 text-right">
+                    {t.qty ? t.qty.toFixed(3) : "—"}
+                  </td>
+                  <td
+                    className={
+                      "py-2 text-right " +
+                      (t.deltaPoints >= 0
+                        ? "text-emerald-400"
+                        : "text-red-400")
+                    }
+                  >
+                    {t.deltaPoints >= 0 ? "+" : ""}
+                    {fmt.format(t.deltaPoints)}
+                  </td>
+                  <td className="py-2 text-right text-neutral-500 text-xs">
+                    {new Date(t.ts).toLocaleString("es-MX")}
+                  </td>
+                  <td className="py-2 text-right">
+                    {puedeCerrar && (
+                      <button
+                        onClick={() =>
+                          handleClosePosition(t.valueId, v?.price ?? 0)
+                        }
+                        className="bg-blue-600 hover:bg-blue-500 px-3 py-0.5 rounded-lg text-xs font-medium transition"
+                      >
+                        Cerrar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>
+
+    {/* 📚 Link a bienes */}
     <Link
       href="/guter"
       className="inline-block mt-6 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition"
     >
       📚 Sieh die verfügbaren Güter
     </Link>
-  </div>
-)} {/* cierre del condicional {user && (...)} */}
+  </>
+)}
+
 </section>
 
 
@@ -1148,7 +1292,7 @@ async function handleClosePosition(valueId: string, price: number) {
 
             <div className="flex flex-col gap-2">
               <input
-                placeholder="ID destino (ej. luis03)"
+                placeholder="ID destino (ej.: 64)"
                 value={transferTo}
                 onChange={(e) => setTransferTo(e.target.value)}
                 className="bg-neutral-800 rounded-lg px-2 py-1"
@@ -1324,42 +1468,48 @@ async function handleClosePosition(valueId: string, price: number) {
   <>
     {/* 🔹 Info y botón de cierre (solo si hay posición abierta) */}
     {positions[chartFor]?.qty > 0 && (
-      <div className="mb-4 text-right">
-        {(() => {
-          const pos = positions[chartFor];
-          const current = selected.price ?? 0;
-          const invested = pos.avgPrice * pos.qty;
-          const currentValue = current * pos.qty;
-          const profit = currentValue - invested;
-          const profitPct = invested > 0 ? (profit / invested) * 100 : 0;
-          return (
-            <div
-              className={
-                "text-sm mb-2 " +
-                (profit >= 0 ? "text-emerald-400" : "text-red-400")
-              }
-            >
-              Ganancia/pérdida actual:{" "}
-              {profit >= 0 ? "+" : ""}
-              {fmt.format(profit)} MXP ({profitPct.toFixed(2)}%)
-            </div>
-          );
-        })()}
+  <div className="mb-4 text-right">
+    {(() => {
+      const pos = positions[chartFor];
+      const current = selected.price ?? 0;
+      const invested = pos.avgPrice * pos.qty;
+      const currentValue = current * pos.qty;
+      const profit = currentValue - invested;
+      const profitPct = invested > 0 ? (profit / invested) * 100 : 0;
 
-        <button
-          onClick={() => handleClosePosition(chartFor, selected.price ?? 0)}
-          className="bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-lg text-sm font-medium transition"
+      
+
+      return (
+        <div
+          className={
+            "text-sm mb-2 " +
+            (profit >= 0 ? "text-emerald-400" : "text-red-400")
+          }
         >
-          Cerrar inversión
-        </button>
-      </div>
-    )}
+          Ganancia/pérdida actual:{" "}
+          {profit >= 0 ? "+" : ""}
+          {fmt.format(profit)} MXP ({profitPct.toFixed(2)}%)
+        </div>
+      );
+    })()}
 
-    <ZoomableCandleWrapper
-      candles={derivedCandles}
-      chartFor={chartFor}
-      tf={tf}
-    />
+    <button
+      onClick={() => handleClosePosition(chartFor, selected.price ?? 0)}
+      className="bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-lg text-sm font-medium transition"
+    >
+      Cerrar inversión
+    </button>
+  </div>
+)}
+
+
+<ZoomableCandleWrapper
+  candles={derivedCandles}
+  chartFor={chartFor}
+  tf={tf}
+  setPortfolioSummary={setPortfolioSummary}
+/>
+
   </>
 ) : (
   <div className="text-sm text-neutral-400">
@@ -1415,18 +1565,141 @@ async function handleClosePosition(valueId: string, price: number) {
             </p>
           </div>
         </div>
-      )}
+            )}
 
-{/* ==== Toast flotante ==== */}
-{toast && (
-  <div
-    className={`fixed bottom-5 right-5 px-4 py-2 rounded-xl shadow-lg text-white text-sm transition-all duration-500 
-      ${toast.color === "green" ? "bg-emerald-600" : toast.color === "red" ? "bg-red-600" : "bg-blue-600"}
-      animate-fade-in-out`}
-  >
-    {toast.msg}
+{/* ==== Modal: Solicitar título del libro adquirido ==== */}
+{pendingBook && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+    <div className="w-full max-w-sm bg-neutral-950 border border-neutral-800 rounded-2xl p-5">
+      <h3 className="text-lg font-semibold mb-2 text-white">
+        📚 Escribe el título del libro
+      </h3>
+      <p className="text-sm text-neutral-400 mb-3">
+        Indica el nombre del libro que deseas recibir.
+      </p>
+
+      <input
+        type="text"
+        value={pendingBook.title}
+        onChange={(e) =>
+          setPendingBook({ ...pendingBook, title: e.target.value })
+        }
+        className="w-full bg-neutral-800 rounded-lg px-3 py-2 text-white outline-none"
+        placeholder="Ej. 'Aprende un idioma en 7 días', etc."
+      />
+
+      <div className="flex justify-end gap-2 mt-4">
+        <button
+          onClick={() => setPendingBook(null)}
+          className="bg-neutral-700 hover:bg-neutral-600 px-3 py-1.5 rounded-lg"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={async () => {
+            if (!pendingBook.title.trim()) {
+              showToast("Por favor escribe un título.", "red");
+              return;
+            }
+            await placeOrder("BUY", pendingBook.valueId, 1);
+            await fetch("/api/txs/note", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                valueId: pendingBook.valueId,
+                note: pendingBook.title.trim(),
+              }),
+            });
+            setPendingBook(null);
+            showToast("Solicitud enviada correctamente.", "green");
+          }}
+          className="bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg text-white"
+        >
+          Confirmar compra
+        </button>
+      </div>
+    </div>
   </div>
 )}
+
+{/* ==== Modal: Seleccionar cantidad de décimas ==== */}
+{pendingZehntel && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+    <div className="w-full max-w-sm bg-neutral-950 border border-neutral-800 rounded-2xl p-5">
+      <h3 className="text-lg font-semibold mb-2 text-white">
+        🔢 ¿Cuántas décimas deseas adquirir?
+      </h3>
+      <p className="text-sm text-neutral-400 mb-4">
+        Indica la cantidad de décimas que deseas comprar.
+      </p>
+
+      {/* Deslizador */}
+      <input
+        type="range"
+        min={1}
+        max={20}
+        value={pendingZehntel.qty}
+        onChange={(e) =>
+          setPendingZehntel({ ...pendingZehntel, qty: Number(e.target.value) })
+        }
+        className="w-full accent-emerald-500"
+      />
+      <div className="text-center text-sm text-neutral-400 mt-1">
+        {pendingZehntel.qty} décima(s)
+      </div>
+
+      {/* 🧮 Resumen dinámico del costo */}
+      <div className="mt-4 text-center border-t border-neutral-800 pt-3 text-sm">
+        {(() => {
+          const v = values[pendingZehntel.valueId];
+          const precioUnit = v?.price ?? 0;
+          const total = (precioUnit * pendingZehntel.qty).toFixed(2);
+          return (
+            <div className="text-neutral-300">
+              💰 Precio unitario:{" "}
+              <span className="text-white font-medium">
+                {fmt.format(precioUnit)} MXP
+              </span>
+              <br />
+              🔸 Total:{" "}
+              <span className="text-emerald-400 font-semibold">
+                {fmt.format(Number(total))} MXP
+              </span>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Botones */}
+      <div className="flex justify-end gap-2 mt-5">
+        <button
+          onClick={() => setPendingZehntel(null)}
+          className="bg-neutral-700 hover:bg-neutral-600 px-3 py-1.5 rounded-lg"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={async () => {
+            if (!pendingZehntel.qty || pendingZehntel.qty <= 0) {
+              showToast("Por favor indica una cantidad válida.", "red");
+              return;
+            }
+            await placeOrder("BUY", pendingZehntel.valueId, pendingZehntel.qty);
+            setPendingZehntel(null);
+            showToast("Décimas adquiridas correctamente.", "green");
+          }}
+          className="bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg text-white"
+        >
+          Confirmar compra
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+
+<ToastComponent />
 
 
     </div>

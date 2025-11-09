@@ -1,3 +1,4 @@
+// app/api/top/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 
@@ -13,19 +14,12 @@ export async function GET() {
       select: { id: true, name: true, points: true },
     });
 
-    if (!users || users.length === 0) {
-      return NextResponse.json(
-        { ok: false, top5: [], message: "No hay usuarios registrados." },
-        { status: 200 }
-      );
-    }
-
-    const now = new Date();
+    if (!users.length)
+      return NextResponse.json({ ok: false, top5: [] }, { status: 200 });
 
     const payload = {
       ok: true,
-      generatedAt: now.toISOString(),
-      nextUpdate: null,
+      generatedAt: new Date().toISOString(),
       top5: users.map((u) => ({
         id: u.id,
         user: u.name,
@@ -33,12 +27,12 @@ export async function GET() {
       })),
     };
 
-    return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
+    // ✅ cache control
+    return NextResponse.json(payload, {
+      headers: { "Cache-Control": "s-maxage=60, stale-while-revalidate=300" },
+    });
   } catch (err: any) {
     console.error("❌ Error en /api/top:", err);
-    return NextResponse.json(
-      { ok: false, error: err?.message || "Error interno del servidor" },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
 }

@@ -1,58 +1,91 @@
 // app/api/factors/route.ts
 import { NextResponse } from "next/server";
-import path from "node:path";
 import fs from "node:fs/promises";
+import path from "node:path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Factors = {
-  views24hPct?: number;
-  coeff?: Record<string, number>;
-  note?: string;
-  updatedAt?: string;
-};
+// ===== Cache en memoria (para reducir lecturas de disco) =====
+let cached: any = null;
+let lastRead = 0;
 
 export async function GET() {
-  // 1) prefer public/factors.txt
-  const txtPath = path.join(process.cwd(), "public", "factors.txt");
-  // 2) fallback a data/factors.json
-  const jsonPath = path.join(process.cwd(), "data", "factors.json");
-
-  const headers = { "Cache-Control": "no-store" };
-
-  async function readAndParseJSON(p: string) {
-    const raw = await fs.readFile(p, "utf8");
-    try {
-      return JSON.parse(raw);
-    } catch {
-      throw new Error("JSON inválido");
-    }
-  }
-
   try {
-    let data: any;
-    try {
-      data = await readAndParseJSON(txtPath);
-    } catch (eTxt: any) {
-      // fallback a JSON en /data
-      data = await readAndParseJSON(jsonPath);
+    const now = Date.now();
+    if (cached && now - lastRead < 60_000) {
+      return NextResponse.json(cached, {
+        headers: { "Cache-Control": "s-maxage=60" },
+      });
     }
 
-    const out: Factors = {
-      views24hPct: typeof data.views24hPct === "number" ? data.views24hPct : undefined,
-      coeff: typeof data.coeff === "object" && data.coeff ? data.coeff : undefined,
-      note: typeof data.note === "string" ? data.note : undefined,
-      updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : undefined,
-    };
+    // === Rutas de origen ===
+    const jsonPath = path.join(process.cwd(), "data", "factors-daily.json");
+    const txtPath = path.join(process.cwd(), "public", "factors.txt");
 
-    return NextResponse.json(out, { headers });
+    let json: any = null;
+
+    // === Intentar leer JSON principal ===
+    try {
+      const raw = await fs.readFile(jsonPath, "utf8");
+      json = JSON.parse(raw);
+    } catch {
+      // === Si no existe, intentar leer el TXT público ===
+      try {
+        const txt = await fs.readFile(txtPath, "utf8");
+        json = parseTxtToJson(txt);
+      } catch {
+        json = null;
+      }
+    }
+
+    if (!json) {
+      return NextResponse.json(
+        { error: "No se encontró ni data/factors-daily.json ni public/factors.txt" },
+        { status: 404 }
+      );
+    }
+
+    // === Normalizar campos esperados ===
+    cached = {
+      views24hPct: json.views24hPct ?? json.vistas24hPct ?? 0,
+      coeff: json.coeff ?? json.coeficientes ?? {},
+      note: json.note ?? json.nota ?? "",
+      updatedAt: json.updatedAt ?? new Date().toISOString(),
+    };
+    lastRead = now;
+
+    return NextResponse.json(cached, {
+      headers: { "Cache-Control": "s-maxage=60" },
+    });
   } catch (err: any) {
-    const code = err?.code === "ENOENT" ? 404 : 500;
-    const msg =
-      err?.code === "ENOENT"
-        ? "No se encontró factors.txt ni factors.json."
-        : (err?.message || "Error leyendo factors.");
-    return NextResponse.json({ error: msg }, { status: code, headers });
+    console.error("❌ Error en /api/factors:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
+}
+
+// ===== Parser auxiliar para factors.txt =====
+function parseTxtToJson(txt: string) {
+  const lines = txt.split(/\r?\n/).map((l) => l.trim());
+  const coeff: Record<string, number> = {};
+  let note = "";
+  let views24hPct = 0;
+
+  for (const line of lines) {
+    if (!line || line.startsWith("#")) continue;
+
+    if (line.includes("views24hPct")) {
+      const val = line.split("=").pop()?.trim();
+      views24hPct = parseFloat(val || "0");
+    } else if (line.startsWith("note=")) {
+      note = line.slice("note=".length).trim();
+    } else if (line.includes("=")) {
+      const [k, v] = line.split("=");
+      const key = k.replace(/^coeff\.|^coef\./, "").trim();
+      const val = parseFloat(v.trim());
+      if (!isNaN(val)) coeff[key] = val;
+    }
+  }
+
+  return { views24hPct, coeff, note, updatedAt: new Date().toISOString() };
 }

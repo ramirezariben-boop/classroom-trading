@@ -1,18 +1,27 @@
 {
   "date": "2025-10-18",
   "volatility": 0.05,
-  "tickSeconds": 7,
-  "candleSeconds": 60,
-  "_borraestocuandoquierasecharaandarestodenuevo_basePrices": {
-    "baumxp": 100,
-    "dsgmxp": 100,
-    "rftmxp": 100,
-    "krimxp": 40,
-    "grmmxp": 40,
-    "litmxp": 50,
-    "hormxp": 55,
-    "sonmxp": 1,
-    "sammxp": 1,
-    "zhnmxp": 12
+  "categoryVolatility": {
+    "aktien": 0.08,
+    "materialien": 0.03,
+    "wahrungen": 0.01,
+    "werte": 0.015,
+    "zehntel": 0.02,
+    "guter": 0.02
+  },
+  "tickSeconds": 300,
+  "candleSeconds": 300,
+  "_nota": "tickSeconds define cada cuánto se recalculan precios (~5 min), candleSeconds agrupa las velas del mismo lapso.",
+  "_basePrices": {
+    "baumxp": 110,
+    "dsgmxp": 95,
+    "rftmxp": 90,
+    "krimxp": 44,
+    "grmmxp": 43,
+    "litmxp": 55,
+    "hormxp": 54,
+    "sonmxp": 1.28,
+    "sammxp": 0.94,
+    "zhnmxp": 13.02
   }
 }

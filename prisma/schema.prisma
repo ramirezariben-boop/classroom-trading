@@ -8,7 +8,7 @@ datasource db {
 }
 
 model User {
-  id            Int        @id
+  id            Int        @id 
   name          String
   day           String?
   user          String?

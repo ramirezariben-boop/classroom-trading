@@ -1,4 +1,3 @@
-// components/Faktoren.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -32,6 +31,8 @@ type WeeklyEntry = { fecha: string; valor: number };
 type WeeklyData = {
   asistencia: { sabado: WeeklyEntry[]; domingo: WeeklyEntry[] };
   calificaciones: { sabado: WeeklyEntry[]; domingo: WeeklyEntry[] };
+  tareas: { sabado: WeeklyEntry[]; domingo: WeeklyEntry[] };
+  "tareas extra": { sabado: WeeklyEntry[]; domingo: WeeklyEntry[] };
 };
 
 const Faktoren = () => {
@@ -39,16 +40,16 @@ const Faktoren = () => {
   const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // === Cargar datos desde la API ===
+  // === Cargar datos desde archivo público ===
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/factors-history", { cache: "no-store" });
-        if (!res.ok) throw new Error("Error cargando datos históricos");
+        const res = await fetch("/factors-history.json", { cache: "no-store" });
+        if (!res.ok) throw new Error("Error cargando factors-history.json");
         const json = await res.json();
         setWeeklyData(json);
       } catch (err) {
-        console.error("❌ Error al cargar /api/factors-history:", err);
+        console.error("❌ Error al cargar factors-history.json:", err);
       } finally {
         setLoading(false);
       }
@@ -56,14 +57,13 @@ const Faktoren = () => {
   }, []);
 
   // === Datos actuales (última semana) ===
-const metrics: Metric[] = [
-  { name: "Participaciones", saturday: 1.24, sunday: 3.02 },
-  { name: "Tareas", saturday: 88.43, sunday: 95.74 },
-  { name: "Calificaciones", saturday: 89, sunday: 90 },
-  { name: "Tareas extra", saturday: 0.96, sunday: 2.89 },
-  { name: "Asistencia", saturday: 67.85, sunday: 80.25 },
-];
-
+  const metrics: Metric[] = [
+    { name: "Participaciones", saturday: 1.24, sunday: 3.02 },
+    { name: "Tareas", saturday: 88.43, sunday: 95.74 },
+    { name: "Calificaciones", saturday: 89, sunday: 90 },
+    { name: "Tareas extra", saturday: 0.96, sunday: 2.89 },
+    { name: "Asistencia", saturday: 67.85, sunday: 80.25 },
+  ];
 
   const ratioCanal = 3.0;
 
@@ -71,9 +71,8 @@ const metrics: Metric[] = [
   const closeChart = () => setSelected(null);
 
   const lower = selected?.toLowerCase() || "";
-const isHistorical =
-  ["asistencia", "calificaciones", "tareas", "tareas extra"].includes(lower);
-
+  const isHistorical =
+    ["asistencia", "calificaciones", "tareas", "tareas extra"].includes(lower);
 
   // === Datos para barras (actual) ===
   const metric = metrics.find((m) => m.name === selected);

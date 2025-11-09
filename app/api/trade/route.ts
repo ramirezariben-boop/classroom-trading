@@ -1,3 +1,4 @@
+// app/api/trade/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import jwt from "jsonwebtoken";
@@ -10,134 +11,98 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    const cookieStore = await cookies();
-    const cookie = cookieStore.get("session_token");
+    const cookie = cookies().get("session_token");
     if (!cookie)
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-    const decoded = jwt.verify(cookie.value, JWT_SECRET) as {
-      id: number;
-      name: string;
-    };
-
+    const decoded = jwt.verify(cookie.value, JWT_SECRET) as { id: number };
     const { mode, valueId, qty, price } = await req.json();
-    if (!mode || !valueId || !qty || !price)
+
+    if (!mode || !valueId)
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
 
     const user = await prisma.user.findUnique({ where: { id: decoded.id } });
     if (!user)
-      return NextResponse.json(
-        { error: "Usuario no encontrado" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
-    const value = await prisma.value.findFirst({
-      where: {
-        OR: [
-          { id: { equals: valueId, mode: "insensitive" } },
-          { name: { equals: valueId, mode: "insensitive" } },
-        ],
-      },
-      select: { id: true, categoryId: true },
+    const pos = await prisma.position.findUnique({
+      where: { userId_valueId: { userId: user.id, valueId } },
     });
 
-    if (!value)
-      return NextResponse.json(
-        { error: "Valor no encontrado" },
-        { status: 404 }
-      );
-
-    // 🚫 Bloqueo de ventas de bienes ("Güter")
-    if (mode === "SELL" && value.categoryId === "guter") {
-      return NextResponse.json(
-        { error: "No se pueden vender bienes (Güter)." },
-        { status: 400 }
-      );
-    }
-
-    const cantidad = Number(qty);
-    const precio = Number(price);
-    const total = +(cantidad * precio).toFixed(2);
     const ts = new Date();
 
-    // ✅ Validar puntos suficientes (solo en compras)
-    if (mode === "BUY" && user.points < total) {
-      return NextResponse.json(
-        { error: "Fondos insuficientes" },
-        { status: 400 }
-      );
-    }
+    // === CIERRE ===
+    if (mode === "CLOSE") {
+      if (!pos || pos.qty <= 0)
+        return NextResponse.json({ error: "No hay posición abierta" }, { status: 400 });
 
-    // 🔹 COMPRA
-    if (mode === "BUY") {
+      const invested = pos.avgPrice * pos.qty;
+      const current = price * pos.qty;
+      const profit = +(current - invested).toFixed(2);
+      const totalReturn = +(invested + profit).toFixed(2);
+
       await prisma.$transaction([
         prisma.user.update({
           where: { id: user.id },
-          data: { points: { decrement: total } },
-        }),
-        prisma.tx.create({
-          data: {
-            userId: user.id,
-            type: "BUY",
-            valueId: value.id,
-            qty: cantidad,
-            deltaPts: -total,
-            ts,
-          },
-        }),
-        prisma.position.upsert({
-          where: { userId_valueId: { userId: user.id, valueId: value.id } },
-          update: {
-            qty: { increment: cantidad },
-            avgPrice: precio,
-          },
-          create: {
-            userId: user.id,
-            valueId: value.id,
-            qty: cantidad,
-            avgPrice: precio,
-          },
-        }),
-      ]);
-
-      return NextResponse.json({ ok: true });
-    }
-
-    // 🔹 VENTA
-    if (mode === "SELL") {
-      await prisma.$transaction([
-        prisma.user.update({
-          where: { id: user.id },
-          data: { points: { increment: total } },
+          data: { points: { increment: totalReturn } },
         }),
         prisma.tx.create({
           data: {
             userId: user.id,
             type: "SELL",
-            valueId: value.id,
-            qty: cantidad,
-            deltaPts: total,
+            valueId,
+            qty: pos.qty,
+            deltaPts: totalReturn,
             ts,
+            note: `Cierre con ${profit >= 0 ? "ganancia" : "pérdida"} de ${profit}`,
           },
         }),
-        prisma.position.updateMany({
-          where: { userId: user.id, valueId: value.id },
-          data: { qty: { decrement: cantidad } },
+        prisma.position.update({
+          where: { userId_valueId: { userId: user.id, valueId } },
+          data: { qty: 0 },
         }),
       ]);
 
+      return NextResponse.json({ ok: true, profit, returned: totalReturn });
+    }
+
+    // === COMPRA / VENTA ===
+    if (mode === "BUY" || mode === "SELL") {
+      const cantidad = Number(qty);
+      const total = +(cantidad * price).toFixed(2);
+      if (cantidad <= 0) return NextResponse.json({ error: "Cantidad inválida" }, { status: 400 });
+
+      const ops =
+        mode === "BUY"
+          ? [
+              prisma.user.update({ where: { id: user.id }, data: { points: { decrement: total } } }),
+              prisma.tx.create({
+                data: { userId: user.id, type: "BUY", valueId, qty: cantidad, deltaPts: -total, ts },
+              }),
+              prisma.position.upsert({
+                where: { userId_valueId: { userId: user.id, valueId } },
+                update: { qty: { increment: cantidad }, avgPrice: price },
+                create: { userId: user.id, valueId, qty: cantidad, avgPrice: price },
+              }),
+            ]
+          : [
+              prisma.user.update({ where: { id: user.id }, data: { points: { increment: total } } }),
+              prisma.tx.create({
+                data: { userId: user.id, type: "SELL", valueId, qty: cantidad, deltaPts: total, ts },
+              }),
+              prisma.position.updateMany({
+                where: { userId: user.id, valueId },
+                data: { qty: { decrement: cantidad } },
+              }),
+            ];
+
+      await prisma.$transaction(ops);
       return NextResponse.json({ ok: true });
     }
 
     return NextResponse.json({ error: "Modo inválido" }, { status: 400 });
-  } catch (err) {
+  } catch (err: any) {
     console.error("❌ Error en /api/trade:", err);
-    return NextResponse.json(
-      { error: "Error en el servidor" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-
-// 🧩 Verificado manualmente 08-nov-2025
-
