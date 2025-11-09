@@ -1642,7 +1642,7 @@ useEffect(() => {
               value={loginId}
               onChange={(e) => setLoginId(e.target.value)}
               className="mt-1 w-full bg-neutral-800 rounded-lg px-3 py-2 outline-none"
-              placeholder="Ej. ana01"
+              placeholder="Ej. 65"
             />
 
             <label className="text-sm text-neutral-400 mt-3 block">Clave</label>
@@ -1651,7 +1651,7 @@ useEffect(() => {
               value={loginCode}
               onChange={(e) => setLoginCode(e.target.value)}
               className="mt-1 w-full bg-neutral-800 rounded-lg px-3 py-2 outline-none"
-              placeholder="Ej. GATO-92"
+              placeholder="Ej. 1234"
             />
 
             <div className="flex justify-end gap-2 mt-4">
