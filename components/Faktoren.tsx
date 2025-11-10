@@ -47,6 +47,9 @@ const Faktoren = () => {
         const res = await fetch("/factors-history.json", { cache: "no-store" });
         if (!res.ok) throw new Error("Error cargando factors-history.json");
         const json = await res.json();
+
+        // 🟢 Limpia el estado antes de asignar los nuevos datos (cero costo extra)
+        setWeeklyData(null);
         setWeeklyData(json);
       } catch (err) {
         console.error("❌ Error al cargar factors-history.json:", err);
@@ -57,14 +60,13 @@ const Faktoren = () => {
   }, []);
 
   // === Datos actuales (última semana) ===
-const metrics: Metric[] = [
-  { name: "Participaciones", saturday: 8.05, sunday: 20.45 },
-  { name: "Tareas", saturday: 91.54, sunday: 89.73 },
-  { name: "Calificaciones", saturday: 91.54, sunday: 89.73 },
-  { name: "Tareas extra", saturday: 1.35, sunday: 4.52 },
-  { name: "Asistencia", saturday: 85.53, sunday: 87.08 },
-];
-
+  const metrics: Metric[] = [
+    { name: "Participaciones", saturday: 8.05, sunday: 20.45 },
+    { name: "Tareas", saturday: 91.54, sunday: 89.73 },
+    { name: "Calificaciones", saturday: 91.54, sunday: 89.73 },
+    { name: "Tareas extra", saturday: 1.35, sunday: 4.52 },
+    { name: "Asistencia", saturday: 85.53, sunday: 87.08 },
+  ];
 
   const ratioCanal = 3.0;
 
@@ -193,10 +195,7 @@ const metrics: Metric[] = [
                     },
                     scales: {
                       x: { ticks: { color: "#aaa" } },
-                      y: {
-                        ticks: { color: "#aaa" },
-                        beginAtZero: true,
-                      },
+                      y: { ticks: { color: "#aaa" }, beginAtZero: true },
                     },
                   }}
                 />
