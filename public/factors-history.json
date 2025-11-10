@@ -102,22 +102,6 @@
       {
         "fecha": "4 oct",
         "valor": 76.76
-      },
-      {
-        "fecha": "18 oct",
-        "valor": 85.98
-      },
-      {
-        "fecha": "25 oct",
-        "valor": 86.49
-      },
-      {
-        "fecha": "1 nov",
-        "valor": 88.43
-      },
-      {
-        "fecha": "8 nov",
-        "valor": 91.54
       }
     ],
     "domingo": [
@@ -128,22 +112,6 @@
       {
         "fecha": "5 oct",
         "valor": 85.27
-      },
-      {
-        "fecha": "19 oct",
-        "valor": 97.2
-      },
-      {
-        "fecha": "26 oct",
-        "valor": 91.18
-      },
-      {
-        "fecha": "2 nov",
-        "valor": 95.74
-      },
-      {
-        "fecha": "9 nov",
-        "valor": 89.73
       }
     ]
   },
@@ -188,6 +156,10 @@
   "tareas extra": {
     "sabado": [
       {
+        "fecha": "18 oct",
+        "valor": 1.93
+      },
+      {
         "fecha": "25 oct",
         "valor": 0.96
       },
@@ -201,6 +173,10 @@
       }
     ],
     "domingo": [
+      {
+        "fecha": "19 oct",
+        "valor": 3.17
+      },
       {
         "fecha": "26 oct",
         "valor": 2.89
