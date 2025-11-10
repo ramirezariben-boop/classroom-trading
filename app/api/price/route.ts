@@ -212,6 +212,16 @@ async function updateActiveCandle(id: string, price: number, now: number) {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const mode = url.searchParams.get("mode");
+// 🧭 Reinicio manual de precios a sus valores base
+if (mode === "reset") {
+  for (const [id, base] of Object.entries(DEFAULTS)) {
+    state.lastPrices.set(id, base);
+  }
+  state.lastTick = Date.now();
+  console.log("♻️ Todos los precios han sido reiniciados a sus valores base.");
+  return NextResponse.json({ ok: true, reset: true, prices: Object.fromEntries(state.lastPrices) });
+}
+
   const key = url.searchParams.get("key");
   const ua = req.headers.get("user-agent")?.toLowerCase() || "";
   const isCron =
@@ -271,6 +281,11 @@ export async function GET(req: Request) {
       const alpha = 0.3;
       next = prev + alpha * (next - prev);
       next = +(next.toFixed(mu < 2 ? 4 : 2));
+
+  // 🔹 Fuerza una variación mínima (0.001%) para permitir nuevas velas
+  if (Math.abs(next - prev) < 0.0001) {
+    next = prev + (Math.random() - 0.5) * 0.0002; // tiny jitter
+  }
 
       state.lastPrices.set(id, next);
       await updateActiveCandle(id, next, tNow);
