@@ -10,12 +10,12 @@ export const dynamic = "force-dynamic";
 
 // ===== Catálogo base =====
 const DEFAULTS: Record<string, number> = {
-  baumxp: 110, dsgmxp: 95, rftmxp: 90,
-  krimxp: 44, grmmxp: 43, litmxp: 55, hormxp: 54,
-  sonmxp: 1.28, sammxp: 0.94,
-  wgrmxp: 1.03, waumxp: 1, wbtmxp: 0.98, wxhmxp: 1.05,
-  zhnmxp: 13.02, anlmxp: 1.02,
-  gzehntel: 13.0, gkrimi: 44, ggramm: 43, glit: 55, ghor: 54,
+  baumxp: 126, dsgmxp: 110, rftmxp: 96,
+  krimxp: 46, grmmxp: 46, litmxp: 53, hormxp: 57,
+  sonmxp: 1.32, sammxp: 1.08,
+  wgrmxp: 1.05, waumxp: 1.03, wbtmxp: 1.00, wxhmxp: 1.08,
+  zhnmxp: 13.4, anlmxp: 1.05,
+  gzehntel: 13.4, gkrimi: 46, ggramm: 46, glit: 53, ghor: 57,
 };
 
 // ===== Tipos =====

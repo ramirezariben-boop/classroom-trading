@@ -15,6 +15,8 @@ export async function GET() {
         { fecha: "18 oct", valor: 74.54 },
         { fecha: "25 oct", valor: 76.36 },
         { fecha: "1 nov", valor: 67.85 },
+        // 🆕 Nueva semana
+        { fecha: "8 nov", valor: 85.53 },
       ],
       domingo: [
         { fecha: "17 ago", valor: 69.05 },
@@ -27,6 +29,8 @@ export async function GET() {
         { fecha: "19 oct", valor: 78.01 },
         { fecha: "26 oct", valor: 82.96 },
         { fecha: "2 nov", valor: 80.25 },
+        // 🆕 Nueva semana
+        { fecha: "9 nov", valor: 87.08 },
       ],
     },
 
@@ -37,6 +41,8 @@ export async function GET() {
         { fecha: "18 oct", valor: 85.98 },
         { fecha: "25 oct", valor: 86.49 },
         { fecha: "1 nov", valor: 88.43 },
+        // 🆕 Nueva semana (proxy de tareas)
+        { fecha: "8 nov", valor: 91.54 },
       ],
       domingo: [
         { fecha: "7 sep", valor: 81.33 },
@@ -44,6 +50,8 @@ export async function GET() {
         { fecha: "19 oct", valor: 97.2 },
         { fecha: "26 oct", valor: 91.18 },
         { fecha: "2 nov", valor: 95.74 },
+        // 🆕 Nueva semana
+        { fecha: "9 nov", valor: 89.73 },
       ],
     },
 
@@ -52,11 +60,15 @@ export async function GET() {
         { fecha: "18 oct", valor: 85.98 },
         { fecha: "25 oct", valor: 86.49 },
         { fecha: "1 nov", valor: 88.43 },
+        // 🆕 Nueva semana
+        { fecha: "8 nov", valor: 91.54 },
       ],
       domingo: [
         { fecha: "19 oct", valor: 97.2 },
         { fecha: "26 oct", valor: 91.18 },
         { fecha: "2 nov", valor: 95.74 },
+        // 🆕 Nueva semana
+        { fecha: "9 nov", valor: 89.73 },
       ],
     },
 
@@ -64,10 +76,14 @@ export async function GET() {
       sabado: [
         { fecha: "25 oct", valor: 0.96 },
         { fecha: "1 nov", valor: 0.96 },
+        // 🆕 Nueva semana
+        { fecha: "8 nov", valor: 1.35 },
       ],
       domingo: [
         { fecha: "26 oct", valor: 2.89 },
         { fecha: "2 nov", valor: 2.89 },
+        // 🆕 Nueva semana
+        { fecha: "9 nov", valor: 4.52 },
       ],
     },
   };
