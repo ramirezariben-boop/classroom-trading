@@ -96,6 +96,7 @@ const state: State = {
   lastTick: 0,
 };
 
+
 // ===== Utils =====
 function randn() {
   let u = 0, v = 0;
@@ -233,7 +234,8 @@ export async function GET(req: Request) {
   const now = Date.now();
   const factors = loadFactors();
   const sig = await loadSignals();
-  const VOL = factors.volatility ?? sig.volatility ?? 0.05;
+
+
   const TICK_MS = (factors.tickSeconds ?? 7) * 1000;
 
   if (state.lastPrices.size === 0) await initializeLastPrices();
@@ -241,21 +243,29 @@ export async function GET(req: Request) {
   const steps = Math.max(1, Math.floor((now - state.lastTick) / TICK_MS));
 
   for (let s = 0; s < steps; s++) {
-    const tNow = now - (steps - 1 - s) * TICK_MS;
-    for (const [id, base] of Object.entries(DEFAULTS)) {
-      const mu = base;
-      const prev = state.lastPrices.get(id) ?? mu;
-      const variation = randn() * VOL;
-      let next = mu * (1 + variation);
-      const maxDev = VOL;
-      next = Math.min(mu * (1 + maxDev), Math.max(mu * (1 - maxDev), next));
-      const alpha = 0.3;
-      next = prev + alpha * (next - prev);
-      next = +(next.toFixed(mu < 2 ? 4 : 2));
-      state.lastPrices.set(id, next);
-      await updateActiveCandle(id, next, tNow);
+  const tNow = now - (steps - 1 - s) * TICK_MS;
+
+  for (const [id, base] of Object.entries(DEFAULTS)) {
+    // 🔹 Volatilidad diferenciada por tipo
+    let VOL = factors.volatility ?? sig.volatility ?? 0.05;
+    if (["anwmpx", "xhamxp", "aufmxp", "notmxp"].includes(id)) {
+      VOL = 0.03; // ±3 % solo para Indikatoren
     }
+
+    const mu = base;
+    const prev = state.lastPrices.get(id) ?? mu;
+    const variation = randn() * VOL;
+    let next = mu * (1 + variation);
+    const maxDev = VOL;
+    next = Math.min(mu * (1 + maxDev), Math.max(mu * (1 - maxDev), next));
+    const alpha = 0.3;
+    next = prev + alpha * (next - prev);
+    next = +(next.toFixed(mu < 2 ? 4 : 2));
+
+    state.lastPrices.set(id, next);
+    await updateActiveCandle(id, next, tNow);
   }
+}
 
   state.lastTick = now;
   const out: Record<string, number> = {};
