@@ -220,7 +220,7 @@ export async function GET(req: Request) {
     ua.includes("cron") ||
     ua.includes("uptime");
 
-    // 🔹 1️⃣ Actualiza los indicadores ANWMXP, XHAMXP, AUFMXP, NOTMXP
+  // 🔹 1️⃣ Actualiza los indicadores ANWMXP, XHAMXP, AUFMXP, NOTMXP
   await updateIndicatorsFromFactors();
 
   // === Lectura simple (frontend) ===
@@ -234,8 +234,6 @@ export async function GET(req: Request) {
   const now = Date.now();
   const factors = loadFactors();
   const sig = await loadSignals();
-
-
   const TICK_MS = (factors.tickSeconds ?? 7) * 1000;
 
   if (state.lastPrices.size === 0) await initializeLastPrices();
@@ -243,48 +241,41 @@ export async function GET(req: Request) {
   const steps = Math.max(1, Math.floor((now - state.lastTick) / TICK_MS));
 
   for (let s = 0; s < steps; s++) {
-  const tNow = now - (steps - 1 - s) * TICK_MS;
+    const tNow = now - (steps - 1 - s) * TICK_MS;
 
-  for (const [id, base] of Object.entries(DEFAULTS)) {
-    const mu = base;
-    const prev = state.lastPrices.get(id) ?? mu;
+    for (const [id, base] of Object.entries(DEFAULTS)) {
+      const mu = base;
+      const prev = state.lastPrices.get(id) ?? mu;
 
-    // 🔹 Volatilidad diferenciada por tipo
-    const isIndicator = ["anwmpx", "xhamxp", "aufmxp", "notmxp"].includes(id);
-    const VOL = isIndicator ? 0.03 : factors.volatility ?? sig.volatility ?? 0.05;
+      // 🔹 Volatilidad diferenciada por tipo
+      const isIndicator = ["anwmpx", "xhamxp", "aufmxp", "notmxp"].includes(id);
+      const VOL = isIndicator ? 0.03 : factors.volatility ?? sig.volatility ?? 0.05;
 
-    // 🔹 Escala de estabilización (evita explosiones en valores < 10)
-    const scale = mu < 10 ? 0.002 : 1; // 0.2 % máx. si el valor base es muy bajo
+      // 🔹 Escala de estabilización (evita explosiones en valores < 10)
+      const scale = mu < 10 ? 0.002 : 1;
 
-    const variation = randn() * VOL * scale;
-    let next = mu * (1 + variation);
+      // 🔹 Variación con reversión a la media
+      let next = prev * (1 + randn() * VOL * scale);
+      next += 0.1 * (mu - next); // atracción hacia su valor base
 
-    // 🔹 Límites dinámicos
-    const maxDev = VOL * scale;
-    next = Math.min(mu * (1 + maxDev), Math.max(mu * (1 - maxDev), next));
+      // 🔹 Límites dinámicos
+      const maxDev = VOL * scale;
+      next = Math.min(mu * (1 + maxDev * 4), Math.max(mu * (1 - maxDev * 4), next));
 
-    // 🔹 Límite especial: sonmxp y sammxp no pueden superar 2.5
-    if (["sonmxp", "sammxp"].includes(id) && next > 2.5) {
-      next = 2.5;
+      // 🔹 Límite especial: sonmxp y sammxp entre 0.5 y 2.5
+      if (["sonmxp", "sammxp"].includes(id)) {
+        next = Math.min(2.5, Math.max(0.5, next));
+      }
+
+      // 🔹 Suavizado para evitar saltos bruscos
+      const alpha = 0.3;
+      next = prev + alpha * (next - prev);
+      next = +(next.toFixed(mu < 2 ? 4 : 2));
+
+      state.lastPrices.set(id, next);
+      await updateActiveCandle(id, next, tNow);
     }
-
-    // 🔹 Piso mínimo (nunca bajan de 0.5)
-if (["sonmxp", "sammxp"].includes(id) && next < 0.5) {
-  next = 0.5;
-}
-
-
-    // 🔹 Suavizado para evitar saltos bruscos
-    const alpha = 0.3;
-    next = prev + alpha * (next - prev);
-    next = +(next.toFixed(mu < 2 ? 4 : 2));
-
-    state.lastPrices.set(id, next);
-    await updateActiveCandle(id, next, tNow);
   }
-}
-
-
 
   state.lastTick = now;
   const out: Record<string, number> = {};
