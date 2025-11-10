@@ -13,10 +13,63 @@ const DEFAULTS: Record<string, number> = {
   baumxp: 126, dsgmxp: 110, rftmxp: 96,
   krimxp: 46, grmmxp: 46, litmxp: 53, hormxp: 57,
   sonmxp: 1.32, sammxp: 1.08,
-  wgrmxp: 1.05, waumxp: 1.03, wbtmxp: 1.00, wxhmxp: 1.08,
+  anwmpx: 86.03,
+  xhamxp: 2.95,
+  aufmxp: 90.63,
+  notmxp: 81.01,
   zhnmxp: 13.4, anlmxp: 1.05,
   gzehntel: 13.4, gkrimi: 46, ggramm: 46, glit: 53, ghor: 57,
 };
+
+// ✅ Actualizar indicadores automáticamente desde factors-history.json
+async function updateIndicatorsFromFactors() {
+  try {
+    const filePath = path.join(process.cwd(), "public", "factors-history.json");
+    if (!fs.existsSync(filePath)) {
+      console.warn("⚠️ No se encontró factors-history.json");
+      return;
+    }
+
+    const raw = await fsp.readFile(filePath, "utf8");
+    const data = JSON.parse(raw);
+
+    // === 1. Asistencia promedio ===
+    const asistenciaSab = data.asistencia?.sabado?.at(-1)?.valor ?? 0;
+    const asistenciaDom = data.asistencia?.domingo?.at(-1)?.valor ?? 0;
+    const asistenciaProm = (asistenciaSab + asistenciaDom) / 2;
+
+    // === 2. Tareas extra (ratio tareas/alumno) ===
+    const tareasSab = data.tareas_extra?.sabado?.at(-1)?.valor ?? 0;
+    const tareasDom = data.tareas_extra?.domingo?.at(-1)?.valor ?? 0;
+    const tareasProm = (tareasSab + tareasDom) / 2;
+
+    // === 3. Calificaciones tareas ===
+    const tareasNotasSab = data.tareas?.sabado?.at(-1)?.valor ?? 0;
+    const tareasNotasDom = data.tareas?.domingo?.at(-1)?.valor ?? 0;
+    const tareasNotasProm = (tareasNotasSab + tareasNotasDom) / 2;
+
+    // === 4. Calificaciones exámenes ===
+    const notasSab = data.calificaciones?.sabado?.at(-1)?.valor ?? 0;
+    const notasDom = data.calificaciones?.domingo?.at(-1)?.valor ?? 0;
+    const notasProm = (notasSab + notasDom) / 2;
+
+    // 🧮 Actualizar DEFAULTS en memoria
+    if (asistenciaProm) DEFAULTS.anwmpx = Number(asistenciaProm.toFixed(2));
+    if (tareasProm) DEFAULTS.xhamxp = Number(tareasProm.toFixed(2));
+    if (tareasNotasProm) DEFAULTS.aufmxp = Number(tareasNotasProm.toFixed(2));
+    if (notasProm) DEFAULTS.notmxp = Number(notasProm.toFixed(2));
+
+    console.log("📊 Indicadores actualizados desde factors-history.json:", {
+      anwmpx: DEFAULTS.anwmpx,
+      xhamxp: DEFAULTS.xhamxp,
+      aufmxp: DEFAULTS.aufmxp,
+      notmxp: DEFAULTS.notmxp,
+    });
+  } catch (err) {
+    console.error("❌ Error al actualizar indicadores:", err);
+  }
+}
+
 
 // ===== Tipos =====
 type Signals = {
@@ -165,6 +218,9 @@ export async function GET(req: Request) {
     key === "dev" ||
     ua.includes("cron") ||
     ua.includes("uptime");
+
+    // 🔹 1️⃣ Actualiza los indicadores ANWMXP, XHAMXP, AUFMXP, NOTMXP
+  await updateIndicatorsFromFactors();
 
   // === Lectura simple (frontend) ===
   if (mode === "read") {

@@ -1,5 +1,8 @@
 // app/api/factors-history/route.ts
 import { NextResponse } from "next/server";
+import fs from "fs/promises";
+import path from "path";
+
 export const dynamic = "force-dynamic";
 
 export async function GET() {
@@ -25,7 +28,7 @@ export async function GET() {
         { fecha: "7 sep", valor: 84.4 },
         { fecha: "14 sep", valor: 81.28 },
         { fecha: "21 sep", valor: 81.29 },
-        { fecha: "28 sep", valor: NaN },
+        { fecha: "28 sep", valor: null },
         { fecha: "19 oct", valor: 78.01 },
         { fecha: "26 oct", valor: 82.96 },
         { fecha: "2 nov", valor: 80.25 },
@@ -59,7 +62,8 @@ export async function GET() {
       ],
     },
 
-    "tareas extra": {
+    // ⚠️ cambia el nombre aquí para que coincida con lo que lee /api/price/
+    tareas_extra: {
       sabado: [
         { fecha: "25 oct", valor: 1.93 },
         { fecha: "1 nov", valor: 0.96 },
@@ -72,6 +76,12 @@ export async function GET() {
       ],
     },
   };
+
+  // 🧩 Guardar automáticamente en public/factors-history.json
+  const outputPath = path.join(process.cwd(), "public", "factors-history.json");
+  await fs.writeFile(outputPath, JSON.stringify(data, null, 2), "utf8");
+
+  console.log("✅ Archivo factors-history.json actualizado en /public");
 
   return NextResponse.json(data);
 }

@@ -37,7 +37,7 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: "aktien", name: "Aktien", description: "Projekte" },
   { id: "materialien", name: "Materialien", description: "PDFs" },
   { id: "wahrungen", name: "Währungen", description: "Grupos" },
-  { id: "werte", name: "Werte", description: "Puntos" },
+  { id: "indikatoren", name: "Indikatoren", description: "Indicadores del grupo" },
   { id: "zehntel", name: "Zehntel", description: "Décimas" },
   { id: "guter", name: "Güter", description: "Mercancías" },
 ];
@@ -57,11 +57,12 @@ const DEFAULT_VALUES: Value[] = [
   { id: "sonmxp", categoryId: "wahrungen", name: "SONMXP", description: "Valor de los puntos del domingo", price: 0, changePct: 0, updatedAt: 0 },
   { id: "sammxp", categoryId: "wahrungen", name: "SAMMXP", description: "Valor de los puntos del sábado", price: 0, changePct: 0, updatedAt: 0 },
 
-  // Werte
-  { id: "wgrmxp", categoryId: "werte", name: "WGRMXP", description: "Valor de los puntos del domingo", price: 0, changePct: 0, updatedAt: 0 },
-  { id: "waumxp", categoryId: "werte", name: "WAUMXP", description: "Valor de los puntos del sábado", price: 0, changePct: 0, updatedAt: 0 },
-  { id: "wbtmxp", categoryId: "werte", name: "WBTMXP", description: "Valor de los puntos del domingo", price: 0, changePct: 0, updatedAt: 0 },
-  { id: "wxhmxp", categoryId: "werte", name: "WXHMXP", description: "Valor de los puntos del sábado", price: 0, changePct: 0, updatedAt: 0 },
+  // Indikatoren
+{ id: "anwmpx", categoryId: "indikatoren", name: "ANWMXP", description: "Asistencia promedio (sab/dom)", price: 86.03, changePct: 0, updatedAt: 0 },
+{ id: "xhamxp", categoryId: "indikatoren", name: "XHAMXP", description: "Tareas extra promedio (sab/dom)", price: 2.95, changePct: 0, updatedAt: 0 },
+{ id: "aufmxp", categoryId: "indikatoren", name: "AUFMXP", description: "Calificaciones de tareas promedio (sab/dom)", price: 90.63, changePct: 0, updatedAt: 0 },
+{ id: "notmxp", categoryId: "indikatoren", name: "NOTMXP", description: "Calificaciones de exámenes promedio (sab/dom)", price: 81.01, changePct: 0, updatedAt: 0 },
+
 
   // Zehntel
   { id: "zhnmxp", categoryId: "zehntel", name: "ZHNMXP", description: "Valor de la décima", price: 0, changePct: 0, updatedAt: 0 },
