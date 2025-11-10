@@ -212,15 +212,43 @@ async function updateActiveCandle(id: string, price: number, now: number) {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const mode = url.searchParams.get("mode");
-// 🧭 Reinicio manual de precios a sus valores base
+// 🧭 Reinicio manual de precios a sus valores base (persistente)
 if (mode === "reset") {
   for (const [id, base] of Object.entries(DEFAULTS)) {
     state.lastPrices.set(id, base);
   }
   state.lastTick = Date.now();
-  console.log("♻️ Todos los precios han sido reiniciados a sus valores base.");
-  return NextResponse.json({ ok: true, reset: true, prices: Object.fromEntries(state.lastPrices) });
+
+  try {
+    // 💾 Inserta una vela base para cada valor
+    await prisma.candle.createMany({
+      data: Object.entries(DEFAULTS).map(([id, base]) => ({
+        valueId: id,
+        timeframe: "5m",
+        time: new Date(),
+        ts: new Date(),
+        open: base,
+        high: base,
+        low: base,
+        close: base,
+      })),
+      skipDuplicates: true,
+    });
+
+    console.log("💾 Velas reiniciadas en base de datos (valores base).");
+  } catch (err) {
+    console.error("❌ Error al guardar velas base:", err);
+  }
+
+  console.log("♻️ Todos los precios han sido reiniciados a sus valores base (persistente).");
+  return NextResponse.json({
+    ok: true,
+    reset: true,
+    persisted: true,
+    prices: Object.fromEntries(state.lastPrices),
+  });
 }
+
 
   const key = url.searchParams.get("key");
   const ua = req.headers.get("user-agent")?.toLowerCase() || "";
