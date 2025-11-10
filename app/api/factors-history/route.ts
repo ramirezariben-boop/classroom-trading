@@ -61,14 +61,12 @@ export async function GET() {
 
     "tareas extra": {
       sabado: [
-        { fecha: "18 oct", valor: 1.93 },
-        { fecha: "25 oct", valor: 0.96 },
+        { fecha: "25 oct", valor: 1.93 },
         { fecha: "1 nov", valor: 0.96 },
         { fecha: "8 nov", valor: 1.35 },
       ],
       domingo: [
-        { fecha: "19 oct", valor: 3.17 },
-        { fecha: "26 oct", valor: 2.89 },
+        { fecha: "26 oct", valor: 3.17 },
         { fecha: "2 nov", valor: 2.89 },
         { fecha: "9 nov", valor: 4.52 },
       ],

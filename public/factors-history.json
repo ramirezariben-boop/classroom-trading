@@ -156,12 +156,8 @@
   "tareas extra": {
     "sabado": [
       {
-        "fecha": "18 oct",
-        "valor": 1.93
-      },
-      {
         "fecha": "25 oct",
-        "valor": 0.96
+        "valor": 1.93
       },
       {
         "fecha": "1 nov",
@@ -174,12 +170,8 @@
     ],
     "domingo": [
       {
-        "fecha": "19 oct",
-        "valor": 3.17
-      },
-      {
         "fecha": "26 oct",
-        "valor": 2.89
+        "valor": 3.17
       },
       {
         "fecha": "2 nov",
