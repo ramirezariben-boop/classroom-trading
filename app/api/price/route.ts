@@ -212,42 +212,27 @@ async function updateActiveCandle(id: string, price: number, now: number) {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const mode = url.searchParams.get("mode");
-// 🧭 Reinicio manual de precios a sus valores base (persistente)
-if (mode === "reset") {
+// 🌿 Normalización parcial hacia los valores base
+if (mode === "normalize") {
+  if (state.lastPrices.size === 0) await initializeLastPrices();
+
+  const factor = 0.3; // 🔹 30% de corrección hacia su valor base
   for (const [id, base] of Object.entries(DEFAULTS)) {
-    state.lastPrices.set(id, base);
-  }
-  state.lastTick = Date.now();
-
-  try {
-    // 💾 Inserta una vela base para cada valor
-    await prisma.candle.createMany({
-      data: Object.entries(DEFAULTS).map(([id, base]) => ({
-        valueId: id,
-        timeframe: "5m",
-        time: new Date(),
-        ts: new Date(),
-        open: base,
-        high: base,
-        low: base,
-        close: base,
-      })),
-      skipDuplicates: true,
-    });
-
-    console.log("💾 Velas reiniciadas en base de datos (valores base).");
-  } catch (err) {
-    console.error("❌ Error al guardar velas base:", err);
+    const prev = state.lastPrices.get(id) ?? base;
+    const corrected = prev + factor * (base - prev);
+    state.lastPrices.set(id, +(corrected.toFixed(base < 2 ? 4 : 2)));
   }
 
-  console.log("♻️ Todos los precios han sido reiniciados a sus valores base (persistente).");
+  console.log(`🌿 Precios normalizados hacia sus valores base (${factor * 100}% de corrección)`);
+
   return NextResponse.json({
     ok: true,
-    reset: true,
-    persisted: true,
+    normalize: true,
+    correction: factor,
     prices: Object.fromEntries(state.lastPrices),
   });
 }
+
 
 
   const key = url.searchParams.get("key");
