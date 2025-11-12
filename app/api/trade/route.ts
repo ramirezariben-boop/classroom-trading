@@ -1,4 +1,3 @@
-// app/api/trade/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import jwt from "jsonwebtoken";
@@ -25,79 +24,75 @@ export async function POST(req: Request) {
     if (!user)
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
-    const pos = await prisma.position.findUnique({
-      where: { userId_valueId: { userId: user.id, valueId } },
-    });
-
     const ts = new Date();
 
-    // === CIERRE ===
-    if (mode === "CLOSE") {
-      if (!pos || pos.qty <= 0)
-        return NextResponse.json({ error: "No hay posición abierta" }, { status: 400 });
+    // === COMPRA o VENTA (simétricas) ===
+    if (mode === "BUY" || mode === "SELL") {
+      const cantidad = Number(qty);
+      const precio = Number(price);
+      if (cantidad <= 0 || precio <= 0)
+        return NextResponse.json({ error: "Cantidad o precio inválido" }, { status: 400 });
 
-      const invested = pos.avgPrice * pos.qty;
-      const current = price * pos.qty;
-      const profit = +(current - invested).toFixed(2);
-      const totalReturn = +(invested + profit).toFixed(2);
+      const total = +(cantidad * precio).toFixed(2);
+      const isShort = mode === "SELL";
+
+      if (user.points < total)
+        return NextResponse.json({ error: "Fondos insuficientes" }, { status: 400 });
+
+      const existing = await prisma.position.findUnique({
+        where: { userId_valueId_isShort: { userId: user.id, valueId, isShort } },
+      });
 
       await prisma.$transaction([
+        // 💸 Resta puntos al abrir la posición (long o short)
         prisma.user.update({
           where: { id: user.id },
-          data: { points: { increment: totalReturn } },
+          data: { points: { decrement: total } },
         }),
+
+        // 🧾 Registrar la transacción
         prisma.tx.create({
           data: {
             userId: user.id,
-            type: "SELL",
+            type: mode,
             valueId,
-            qty: pos.qty,
-            deltaPts: totalReturn,
+            qty: cantidad,
+            deltaPts: -total,
             ts,
-            note: `Cierre con ${profit >= 0 ? "ganancia" : "pérdida"} de ${profit}`,
           },
         }),
-        prisma.position.update({
-          where: { userId_valueId: { userId: user.id, valueId } },
-          data: { qty: 0 },
+
+        // 📊 Crear o actualizar la posición con su flag long/short
+        prisma.position.upsert({
+          where: { userId_valueId_isShort: { userId: user.id, valueId, isShort } },
+          update: {
+            avgPrice:
+              existing && existing.qty > 0
+                ? (existing.avgPrice * existing.qty + precio * cantidad) /
+                  (existing.qty + cantidad)
+                : precio,
+            qty: { increment: cantidad },
+          },
+          create: {
+            userId: user.id,
+            valueId,
+            qty: cantidad,
+            avgPrice: precio,
+            isShort,
+          },
         }),
       ]);
 
-      return NextResponse.json({ ok: true, profit, returned: totalReturn });
+      return NextResponse.json({ ok: true });
     }
 
-    // === COMPRA / VENTA ===
-    if (mode === "BUY" || mode === "SELL") {
-      const cantidad = Number(qty);
-      const total = +(cantidad * price).toFixed(2);
-      if (cantidad <= 0) return NextResponse.json({ error: "Cantidad inválida" }, { status: 400 });
-
-      const ops =
-        mode === "BUY"
-          ? [
-              prisma.user.update({ where: { id: user.id }, data: { points: { decrement: total } } }),
-              prisma.tx.create({
-                data: { userId: user.id, type: "BUY", valueId, qty: cantidad, deltaPts: -total, ts },
-              }),
-              prisma.position.upsert({
-                where: { userId_valueId: { userId: user.id, valueId } },
-                update: { qty: { increment: cantidad }, avgPrice: price },
-                create: { userId: user.id, valueId, qty: cantidad, avgPrice: price },
-              }),
-            ]
-          : [
-              prisma.user.update({ where: { id: user.id }, data: { points: { increment: total } } }),
-              prisma.tx.create({
-                data: { userId: user.id, type: "SELL", valueId, qty: cantidad, deltaPts: total, ts },
-              }),
-              prisma.position.updateMany({
-                where: { userId: user.id, valueId },
-                data: { qty: { decrement: cantidad } },
-              }),
-            ];
-
-      await prisma.$transaction(ops);
-      return NextResponse.json({ ok: true });
+    // === CIERRE de posición ===
+    if (mode === "CLOSE") {
+      // Para cierre explícito usa /api/close
+      return NextResponse.json(
+        { error: "Usa /api/close para cerrar posiciones" },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json({ error: "Modo inválido" }, { status: 400 });

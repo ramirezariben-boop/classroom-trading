@@ -11,15 +11,19 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const cookie = cookies().get("session_token");
+    // ✅ Corrección: cookies() ahora requiere "await"
+    const cookieStore = await cookies();
+    const cookie = cookieStore.get("session_token");
     if (!cookie)
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
     const decoded = jwt.verify(cookie.value, JWT_SECRET) as { id: number };
+
+    // 🧩 Traer usuario con posiciones y transacciones
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
       include: {
-        positions: true,
+        positions: true, // ya incluye isShort por el modelo actualizado
         txs: { orderBy: { ts: "desc" }, take: 50 },
       },
     });
@@ -27,31 +31,46 @@ export async function GET() {
     if (!user)
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
-    // ⚙️ Obtener todos los precios en un solo query
+    // ⚙️ Obtener precios actuales de todos los valores
     const allValues = await prisma.value.findMany({
       select: { id: true, price: true, categoryId: true, description: true },
     });
-    const priceMap = Object.fromEntries(allValues.map(v => [v.id, v]));
 
-    // 🧮 Cálculos
-    let invested = 0, profit = 0;
+    const priceMap = Object.fromEntries(allValues.map((v) => [v.id, v]));
+
+    // 🧮 Cálculo de capital, ganancias y pérdidas
+    let invested = 0;
+    let profit = 0;
+
     for (const p of user.positions) {
-      const current = priceMap[p.valueId]?.price ?? p.avgPrice;
-      invested += p.avgPrice * p.qty;
-      profit += (current - p.avgPrice) * p.qty;
+      if (p.qty <= 0) continue;
+
+      const currentPrice = priceMap[p.valueId]?.price ?? p.avgPrice;
+      const investedPos = p.avgPrice * p.qty;
+      const currentValue = currentPrice * p.qty;
+
+      // 🔁 Si es short, invierte la lógica de ganancia
+      const profitPos = p.isShort
+        ? investedPos - currentValue // gana si baja
+        : currentValue - investedPos; // gana si sube
+
+      invested += investedPos;
+      profit += profitPos;
     }
 
-    const total = user.points + invested + profit;
+    const total = user.points + profit;
 
+    // 🧾 Formatear respuesta
     return NextResponse.json({
       points: user.points,
       invested,
       profit,
       total,
-      positions: user.positions.map(p => ({
+      positions: user.positions.map((p) => ({
         valueId: p.valueId,
         qty: p.qty,
         avgPrice: p.avgPrice,
+        isShort: p.isShort, // ✅ incluir flag
         categoryId: priceMap[p.valueId]?.categoryId,
         description: priceMap[p.valueId]?.description,
       })),

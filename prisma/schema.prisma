@@ -8,7 +8,7 @@ datasource db {
 }
 
 model User {
-  id            Int        @id 
+  id            Int        @id
   name          String
   day           String?
   user          String?
@@ -59,10 +59,11 @@ model Position {
   qty       Float
   updatedAt DateTime @updatedAt
   id        Int      @id @default(autoincrement())
+  isShort   Boolean  @default(false)
   user      User     @relation(fields: [userId], references: [id])
   value     Value    @relation(fields: [valueId], references: [id])
 
-  @@unique([userId, valueId])
+  @@unique([userId, valueId, isShort])
 }
 
 model Candle {

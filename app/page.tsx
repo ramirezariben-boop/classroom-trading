@@ -272,6 +272,9 @@ export default function Page() {
   const [transferConcept, setTransferConcept] = useState("");
   const [factors, setFactors] = useState<{ views24hPct?: number; coeff?: Record<string, number>; note?: string; updatedAt?: string } | null>(null);
 
+  const [showClosed, setShowClosed] = useState(false);
+
+
 // 🔒 Bloquear scroll del fondo cuando hay modales abiertos
 useEffect(() => {
   const html = document.documentElement;
@@ -577,21 +580,24 @@ async function refreshPortfolio() {
       { qty: number; avgPrice: number; categoryId?: string; description?: string }
     > = {};
 
-    for (const p of data.positions) {
-      newPositions[p.valueId] = {
-        qty: p.qty,
-        avgPrice: p.avgPrice,
-        categoryId: p.categoryId,
-        description: p.description,
-      };
-    }
+for (const p of data.positions) {
+  const key = `${p.valueId}_${p.isShort ? "true" : "false"}`;
+  newPositions[key] = {
+    qty: p.qty,
+    avgPrice: p.avgPrice,
+    categoryId: p.categoryId,
+    description: p.description,
+  };
+}
+
 
     setPositions(newPositions);
 
     // 🔹 Actualizar transacciones recientes
     const mapped = data.txs.map((t) => ({
       id: t.id,
-      ts: new Date(t.ts).getTime(),
+      ts: typeof t.ts === "string" ? t.ts : new Date(t.ts).toISOString(),
+
       type: t.type,
       valueId: t.valueId,
       qty: t.qty,
@@ -622,7 +628,8 @@ async function refreshPortfolio() {
     const data = await res.json();
     return data.txs.map((t: any) => ({
       id: t.id,
-      ts: new Date(t.ts).getTime(),
+      ts: typeof t.ts === "string" ? t.ts : new Date(t.ts).toISOString(),
+
       type: (t.type as any) ?? "RESET",
       valueId: t.valueId,
       qty: t.qty,
@@ -680,13 +687,33 @@ async function placeOrder(mode: "BUY" | "SELL", valueId: string, qty: number) {
 }
 
 // === Cierre de posición ===
-async function handleClosePosition(valueId: string, price: number) {
-  if (!confirm(`¿Cerrar tu posición en ${valueId}?`)) return;
+// === Cierre de posición ===
+async function handleClosePosition(valueId: string, price: number, isShortParam?: boolean) {
+
+  // ⚙️ Buscar si existe una posición short o long abierta para este valor
+  const longPos = positions[valueId + "_false"] || positions[valueId];
+  const shortPos = positions[valueId + "_true"];
+
+  // 🔹 Determinar qué tipo de posición cerrar
+  let posType: "long" | "short" | null = null;
+  if (longPos && longPos.qty > 0) posType = "long";
+  else if (shortPos && shortPos.qty > 0) posType = "short";
+
+  if (!posType) {
+    showToast("No tienes posición abierta en este valor.", "red");
+    return;
+  }
+
+  const isShort = isShortParam ?? (posType === "short");
+
+
+  if (!confirm(`¿Cerrar tu posición ${isShort ? "short (venta)" : "long (compra)"} en ${valueId}?`)) return;
+
   try {
     const res = await fetch("/api/close", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ valueId, price }),
+      body: JSON.stringify({ valueId, price, isShort }),
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Error al cerrar");
@@ -694,7 +721,7 @@ async function handleClosePosition(valueId: string, price: number) {
     const profit = json.profit ?? 0;
     const color = profit >= 0 ? "green" : "red";
     showToast(
-      `${profit >= 0 ? "Ganancia" : "Pérdida"}: ${
+      `${profit >= 0 ? "Ganancia" : "Pérdida"} (${isShort ? "short" : "long"}): ${
         profit >= 0 ? "+" : ""
       }${profit.toFixed(2)} MXP`,
       color
@@ -732,59 +759,45 @@ async function handleClosePosition(valueId: string, price: number) {
       alert(e.message || "Error en transferencia");
     }
   }
-
 // 🔹 Actualiza el resumen global del portafolio completo (sin contar Güter)
 useEffect(() => {
   if (!positions || Object.keys(positions).length === 0) return;
 
   let investedTotal = 0;
-  let currentTotal = 0;
+  let profitTotal = 0;
 
-  // Recorre todas las posiciones abiertas
-  for (const [id, pos] of Object.entries(positions)) {
+  for (const [idKey, pos] of Object.entries(positions)) {
     if (!pos || pos.qty <= 0) continue;
 
+    const [id, shortFlag] = idKey.split("_");
+    const isShort = shortFlag === "true";
     const cat = pos.categoryId || values[id]?.categoryId;
 
-    // 🚫 Excluir todos los Güter (aunque no tengan categoryId explícito)
     const isGuter =
       (cat && cat.toLowerCase() === "guter") ||
       id.startsWith("g") ||
       ["gzehntel", "gkrimi", "ggramm", "glit", "ghor"].includes(id);
-
     if (isGuter) continue;
 
     const current = values[id]?.price ?? 0;
     const invested = pos.avgPrice * pos.qty;
     const currentValue = current * pos.qty;
 
+    // 🧮 Lógica de ganancia invertida si es short
+    const profit = isShort ? invested - currentValue : currentValue - invested;
+
     investedTotal += invested;
-    currentTotal += currentValue;
+    profitTotal += profit;
   }
 
-  // Solo cuenta ganancias/pérdidas de inversiones reales
-  const profitTotal = currentTotal - investedTotal;
+  const total = points + profitTotal;
 
-  // 💰 Total = puntos disponibles + valor actual de inversiones (sin Güter)
-  const total = points + currentTotal;
-
-  setPortfolioSummary((prev) => {
-    if (
-      prev &&
-      prev.invested === investedTotal &&
-      prev.profit === profitTotal &&
-      prev.total === total
-    ) {
-      return prev;
-    }
-    return {
-      invested: investedTotal,
-      profit: profitTotal,
-      total: total,
-    };
+  setPortfolioSummary({
+    invested: investedTotal,
+    profit: profitTotal,
+    total,
   });
 }, [positions, values, points]);
-
 
 
 
@@ -1229,15 +1242,24 @@ useEffect(() => {
 
 
     {/* 📜 Mis transacciones recientes */}
+{/* 📜 Mis transacciones recientes */}
 <div className="bg-neutral-900 rounded-2xl p-5 border border-neutral-800 mt-10 shadow-lg shadow-blue-900/10">
   <h2 className="text-lg font-semibold mb-3 text-blue-300 flex items-center gap-2">
     📜 Mis transacciones recientes
   </h2>
 
+  {/* 🔁 Toggle: mostrar/ocultar operaciones cerradas */}
+  <div className="flex justify-end mb-3">
+    <button
+      onClick={() => setShowClosed((prev) => !prev)}
+      className="text-xs bg-neutral-800 hover:bg-neutral-700 px-2 py-1 rounded-lg text-neutral-300"
+    >
+      {showClosed ? "Ocultar cerradas" : "Ver cerradas"}
+    </button>
+  </div>
+
   {txs.length === 0 ? (
-    <p className="text-sm text-neutral-400">
-      Aún no has realizado operaciones.
-    </p>
+    <p className="text-sm text-neutral-400">Aún no has realizado operaciones.</p>
   ) : (
     <div className="overflow-x-auto">
       <table className="w-full text-sm border-collapse">
@@ -1253,15 +1275,27 @@ useEffect(() => {
         </thead>
         <tbody>
           {txs
-            .slice(-10)
+            .filter((t) => {
+              const v = values[t.valueId];
+              const posLong = positions[t.valueId + "_false"] || positions[t.valueId];
+              const posShort = positions[t.valueId + "_true"];
+              const stillOpen =
+                ((posLong?.qty ?? 0) > 0 && t.type === "BUY") ||
+                ((posShort?.qty ?? 0) > 0 && t.type === "SELL");
+              return showClosed ? true : stillOpen; // 🔹 Muestra solo abiertas si showClosed = false
+            })
+            .slice(-20)
             .reverse()
             .map((t) => {
               const v = values[t.valueId];
-              const pos = positions[t.valueId];
+              const posLong = positions[t.valueId + "_false"] || positions[t.valueId];
+              const posShort = positions[t.valueId + "_true"];
+
+              const isGuter = v?.categoryId?.toLowerCase?.() === "guter";
               const puedeCerrar =
-                pos?.qty > 0 &&
-                v?.categoryId?.toLowerCase() !== "guter" &&
-                t.type === "BUY";
+                !isGuter &&
+                (((posLong?.qty ?? 0) > 0 && t.type === "BUY") ||
+                  ((posShort?.qty ?? 0) > 0 && t.type === "SELL"));
 
               return (
                 <tr
@@ -1296,13 +1330,25 @@ useEffect(() => {
                     {fmt.format(t.deltaPoints)}
                   </td>
                   <td className="py-2 text-right text-neutral-500 text-xs">
-                    {new Date(t.ts).toLocaleString("es-MX")}
+                    {new Date(t.ts).toLocaleString("es-MX", {
+                      timeZone: "America/Mexico_City",
+                      hour12: true,
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </td>
                   <td className="py-2 text-right">
                     {puedeCerrar && (
                       <button
                         onClick={() =>
-                          handleClosePosition(t.valueId, v?.price ?? 0)
+                          handleClosePosition(
+                            t.valueId,
+                            v?.price ?? 0,
+                            (posShort?.qty ?? 0) > 0
+                          )
                         }
                         className="bg-blue-600 hover:bg-blue-500 px-3 py-0.5 rounded-lg text-xs font-medium transition"
                       >
@@ -1318,6 +1364,7 @@ useEffect(() => {
     </div>
   )}
 </div>
+
 
     {/* 📚 Link a bienes */}
     <Link

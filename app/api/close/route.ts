@@ -1,4 +1,3 @@
-// app/api/close/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import jwt from "jsonwebtoken";
@@ -11,76 +10,75 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    // ===== 1. Autenticación =====
     const cookie = cookies().get("session_token");
     if (!cookie)
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
     const decoded = jwt.verify(cookie.value, JWT_SECRET) as { id: number };
+    const { valueId, price, isShort } = await req.json();
 
-    // ===== 2. Datos recibidos =====
-    const { valueId, price } = await req.json();
     if (!valueId || typeof price !== "number" || price <= 0)
       return NextResponse.json({ error: "Datos incompletos o inválidos" }, { status: 400 });
 
-    // ===== 3. Obtener usuario y posición =====
     const user = await prisma.user.findUnique({ where: { id: decoded.id } });
     if (!user)
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
     const pos = await prisma.position.findUnique({
-      where: { userId_valueId: { userId: user.id, valueId } },
+      where: { userId_valueId_isShort: { userId: user.id, valueId, isShort: !!isShort } },
     });
+
     if (!pos || pos.qty <= 0)
       return NextResponse.json({ error: "No hay posición abierta" }, { status: 400 });
 
-    // ===== 4. Calcular resultados =====
+    // === Calcular ganancia/pérdida ===
     const invested = pos.avgPrice * pos.qty;
     const current = price * pos.qty;
-    const profit = +(current - invested).toFixed(2);
+
+    // 🧮 Invertir el cálculo si es posición corta
+    const profit = pos.isShort
+      ? +(invested - current).toFixed(2) // gana si baja
+      : +(current - invested).toFixed(2); // gana si sube
+
     const totalReturn = +(invested + profit).toFixed(2);
     const ts = new Date();
 
-    // ===== 5. Actualizar puntos y registrar transacción =====
     await prisma.$transaction([
-      // 💰 Regresar al usuario el capital invertido + ganancia/pérdida
+      // 💰 Regresar capital + ganancia/pérdida
       prisma.user.update({
         where: { id: user.id },
         data: { points: { increment: totalReturn } },
       }),
 
-      // 🧾 Registrar la transacción
+      // 🧾 Registrar transacción
       prisma.tx.create({
         data: {
           userId: user.id,
-          type: "SELL", // ✅ usamos "SELL" en lugar de "CLOSE" para mantener consistencia con el sistema
+          type: "SELL", // mantenemos consistencia
           valueId,
           qty: pos.qty,
           deltaPts: totalReturn,
           ts,
-          note: `Cierre con ${profit >= 0 ? "ganancia" : "pérdida"} de ${profit.toFixed(2)} MXP`,
+          note: `Cierre ${pos.isShort ? "short" : "long"} con ${
+            profit >= 0 ? "ganancia" : "pérdida"
+          } de ${profit.toFixed(2)} MXP`,
         },
       }),
 
-      // 📉 Eliminar la posición (o dejarla con qty = 0)
+      // 📉 Cerrar posición
       prisma.position.update({
-        where: { userId_valueId: { userId: user.id, valueId } },
+        where: { userId_valueId_isShort: { userId: user.id, valueId, isShort: !!isShort } },
         data: { qty: 0 },
       }),
     ]);
 
     console.log(
-      `✅ ${user.id} cerró ${valueId} → Invertido ${invested.toFixed(
+      `✅ ${user.id} cerró ${valueId} (${pos.isShort ? "short" : "long"}) → Invertido ${invested.toFixed(
         2
       )}, Ganancia ${profit.toFixed(2)}, Total devuelto ${totalReturn.toFixed(2)}`
     );
 
-    // ===== 6. Respuesta final =====
-    return NextResponse.json({
-      ok: true,
-      profit,
-      returned: totalReturn,
-    });
+    return NextResponse.json({ ok: true, profit, returned: totalReturn });
   } catch (err: any) {
     console.error("❌ Error en /api/close:", err);
     return NextResponse.json(

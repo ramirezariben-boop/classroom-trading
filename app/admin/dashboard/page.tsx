@@ -169,7 +169,7 @@ export default function AdminDashboard() {
         <h1 className="text-2xl font-bold mb-2">⛔ Acceso denegado</h1>
         <p className="text-neutral-400 text-sm max-w-sm">
           Esta página es solo para administradores. Si crees que es un error,
-          contacta con el profesor Ben.
+          contacta con el profesor Ari Ben.
         </p>
       </div>
     );
@@ -293,4 +293,3 @@ function MoversList({
     </ul>
   );
 }
-
