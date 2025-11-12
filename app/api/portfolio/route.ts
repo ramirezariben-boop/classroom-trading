@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    // ✅ Corrección: cookies() ahora requiere "await"
+    // ✅ cookies() ahora requiere "await"
     const cookieStore = await cookies();
     const cookie = cookieStore.get("session_token");
     if (!cookie)
@@ -23,7 +23,7 @@ export async function GET() {
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
       include: {
-        positions: true, // ya incluye isShort por el modelo actualizado
+        positions: true, // incluye isShort
         txs: { orderBy: { ts: "desc" }, take: 50 },
       },
     });
@@ -31,14 +31,13 @@ export async function GET() {
     if (!user)
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
-    // ⚙️ Obtener precios actuales de todos los valores
+    // ⚙️ Obtener precios actuales
     const allValues = await prisma.value.findMany({
       select: { id: true, price: true, categoryId: true, description: true },
     });
-
     const priceMap = Object.fromEntries(allValues.map((v) => [v.id, v]));
 
-    // 🧮 Cálculo de capital, ganancias y pérdidas
+    // 🧮 Cálculo de capital invertido y ganancia/pérdida
     let invested = 0;
     let profit = 0;
 
@@ -49,7 +48,7 @@ export async function GET() {
       const investedPos = p.avgPrice * p.qty;
       const currentValue = currentPrice * p.qty;
 
-      // 🔁 Si es short, invierte la lógica de ganancia
+      // 🔁 Lógica short
       const profitPos = p.isShort
         ? investedPos - currentValue // gana si baja
         : currentValue - investedPos; // gana si sube
@@ -58,7 +57,8 @@ export async function GET() {
       profit += profitPos;
     }
 
-    const total = user.points + profit;
+    // ✅ Total correcto: puntos + invertido + ganancia/pérdida
+    const total = user.points + invested + profit;
 
     // 🧾 Formatear respuesta
     return NextResponse.json({
@@ -70,7 +70,7 @@ export async function GET() {
         valueId: p.valueId,
         qty: p.qty,
         avgPrice: p.avgPrice,
-        isShort: p.isShort, // ✅ incluir flag
+        isShort: p.isShort,
         categoryId: priceMap[p.valueId]?.categoryId,
         description: priceMap[p.valueId]?.description,
       })),

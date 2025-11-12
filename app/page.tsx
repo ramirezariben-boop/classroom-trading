@@ -594,16 +594,15 @@ for (const p of data.positions) {
     setPositions(newPositions);
 
     // 🔹 Actualizar transacciones recientes
-    const mapped = data.txs.map((t) => ({
-      id: t.id,
-      ts: typeof t.ts === "string" ? t.ts : new Date(t.ts).toISOString(),
-
-      type: t.type,
-      valueId: t.valueId,
-      qty: t.qty,
-      deltaPoints: Number(t.deltaPts),
-      note: t.note,
-    }));
+const mapped = data.txs.map((t) => ({
+  id: t.id,
+  ts: typeof t.ts === "string" ? t.ts : new Date(t.ts).toISOString(),
+  type: t.type,
+  valueId: t.valueId,
+  qty: t.qty,
+  deltaPoints: Number(t.deltaPoints ?? t.deltaPts ?? 0),
+  note: t.note,
+}));
 
     if (txScope === "me") setTxs(mapped);
 
@@ -759,6 +758,8 @@ async function handleClosePosition(valueId: string, price: number, isShortParam?
       alert(e.message || "Error en transferencia");
     }
   }
+
+
 // 🔹 Actualiza el resumen global del portafolio completo (sin contar Güter)
 useEffect(() => {
   if (!positions || Object.keys(positions).length === 0) return;
@@ -783,14 +784,14 @@ useEffect(() => {
     const invested = pos.avgPrice * pos.qty;
     const currentValue = current * pos.qty;
 
-    // 🧮 Lógica de ganancia invertida si es short
     const profit = isShort ? invested - currentValue : currentValue - invested;
 
     investedTotal += invested;
     profitTotal += profit;
   }
 
-  const total = points + profitTotal;
+  // ✅ Corregido: total = puntos disponibles + capital invertido + ganancia/pérdida
+  const total = points + investedTotal + profitTotal;
 
   setPortfolioSummary({
     invested: investedTotal,
@@ -798,6 +799,7 @@ useEffect(() => {
     total,
   });
 }, [positions, values, points]);
+
 
 
 
