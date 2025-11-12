@@ -111,6 +111,10 @@ body:has(.modal) {
 /* 🔒 Alternativa para navegadores antiguos (aplicada vía clase JS) */
 body.has-modal {
   overflow-x: clip !important;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* Evita scroll horizontal dentro de modales */
@@ -169,34 +173,39 @@ div.fixed.inset-0.bg-neutral-950\/70 * {
    📊 GRÁFICO DE VELAS – FIX FINAL
    ========================================================= */
 
-/* Permite scroll vertical sin romper el horizontal */
-div.candle-scroll-container {
-  overflow: auto !important;
+.candle-scroll-container {
   overflow-x: auto !important;
-  overflow-y: auto !important;
-  overscroll-behavior: contain !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-x pinch-zoom !important;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
   max-height: 100% !important;
 }
 
 /* Scrollbar vertical del gráfico */
-div.candle-scroll-container::-webkit-scrollbar {
-  width: 8px;
+.candle-scroll-container::-webkit-scrollbar {
+  height: 8px;
 }
 
-div.candle-scroll-container::-webkit-scrollbar-thumb {
+.candle-scroll-container::-webkit-scrollbar-thumb {
   background: #404040;
   border-radius: 4px;
 }
 
-div.candle-scroll-container::-webkit-scrollbar-thumb:hover {
+.candle-scroll-container::-webkit-scrollbar-thumb:hover {
   background: #525252;
 }
 
-div.candle-scroll-container::-webkit-scrollbar-track {
+.candle-scroll-container::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* ==== Efecto shimmer para placeholders ==== */
+/* =========================================================
+   ✨ EFECTO SHIMMER PARA PLACEHOLDERS
+   ========================================================= */
+
 @keyframes shimmer {
   0% {
     background-position: -450px 0;
@@ -217,3 +226,42 @@ div.candle-scroll-container::-webkit-scrollbar-track {
   animation: shimmer 1.5s infinite linear;
   border-radius: 0.5rem;
 }
+
+/* =========================================================
+   📱 TOUCH Y SCROLL MULTIPLATAFORMA (iOS + Android)
+   ========================================================= */
+
+html, body {
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: contain !important;
+}
+
+/* ✅ Solo bloqueamos selección en los gráficos */
+canvas, svg {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+/* ✅ Scroll lateral natural con inercia */
+.candle-scroll-container {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  scroll-behavior: smooth;
+  touch-action: pan-x pinch-zoom !important;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
+  max-height: 100% !important;
+}
+
+/* ✅ iOS: corrige rebotes y bloqueos */
+@supports (-webkit-touch-callout: none) {
+  .candle-scroll-container {
+    overflow-x: scroll !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x pinch-zoom !important;
+  }
+}
+

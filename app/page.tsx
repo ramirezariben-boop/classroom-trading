@@ -143,6 +143,32 @@ function ZoomableCandleWrapper({
     lastX.current = e.clientX;
   }
 
+// 🖐️ Soporte táctil (touch drag para móviles)
+useEffect(() => {
+  const el = containerRef.current;
+  if (!el) return;
+
+  let lastX = 0;
+  const onTouchStart = (e: TouchEvent) => {
+    lastX = e.touches[0].clientX;
+  };
+
+  const onTouchMove = (e: TouchEvent) => {
+    const delta = e.touches[0].clientX - lastX;
+    el.scrollLeft -= delta;
+    lastX = e.touches[0].clientX;
+  };
+
+  el.addEventListener("touchstart", onTouchStart, { passive: true });
+  el.addEventListener("touchmove", onTouchMove, { passive: true });
+
+  return () => {
+    el.removeEventListener("touchstart", onTouchStart);
+    el.removeEventListener("touchmove", onTouchMove);
+  };
+}, []);
+
+
   // 🧩 Zoom con la rueda
   useEffect(() => {
     const el = containerRef.current;
@@ -162,7 +188,17 @@ function ZoomableCandleWrapper({
 
   // 🧱 Render
   return (
-    <div className="relative" style={{ height: 300, overflow: "hidden" }}>
+    <div
+  className="relative candle-scroll-container"
+style={{
+  height: "60vh",
+  maxHeight: 400,
+  WebkitOverflowScrolling: "touch",
+  touchAction: "pan-x pan-y",
+}}
+
+>
+
       {/* Contenedor scrollable */}
       <div
         ref={containerRef}
@@ -287,7 +323,12 @@ useEffect(() => {
     html.style.overflow = "hidden";
     body.style.overflow = "hidden";
     body.classList.add("has-modal");
-    const preventScroll = (e: WheelEvent | TouchEvent) => e.preventDefault();
+    const preventScroll = (e: WheelEvent | TouchEvent) => {
+  const target = e.target as HTMLElement;
+  if (target.closest(".candle-scroll-container")) return; // ❗ deja pasar scroll en modal
+  e.preventDefault();
+};
+
     window.addEventListener("wheel", preventScroll, { passive: false });
     window.addEventListener("touchmove", preventScroll, { passive: false });
     return () => {
@@ -1266,102 +1307,123 @@ useEffect(() => {
     <div className="overflow-x-auto">
       <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="border-b border-neutral-700 text-neutral-400">
-            <th className="text-left py-2">Tipo</th>
-            <th className="text-left py-2">Valor</th>
-            <th className="text-right py-2">Cantidad</th>
-            <th className="text-right py-2">Δ Puntos</th>
-            <th className="text-right py-2">Fecha</th>
-            <th className="text-right py-2">Acción</th>
-          </tr>
-        </thead>
-        <tbody>
-          {txs
-            .filter((t) => {
-              const v = values[t.valueId];
-              const posLong = positions[t.valueId + "_false"] || positions[t.valueId];
-              const posShort = positions[t.valueId + "_true"];
-              const stillOpen =
-                ((posLong?.qty ?? 0) > 0 && t.type === "BUY") ||
-                ((posShort?.qty ?? 0) > 0 && t.type === "SELL");
-              return showClosed ? true : stillOpen; // 🔹 Muestra solo abiertas si showClosed = false
-            })
-            .slice(-20)
-            .reverse()
-            .map((t) => {
-              const v = values[t.valueId];
-              const posLong = positions[t.valueId + "_false"] || positions[t.valueId];
-              const posShort = positions[t.valueId + "_true"];
+  <tr className="border-b border-neutral-700 text-neutral-400">
+    <th className="text-left py-2">Tipo</th>
+    <th className="text-left py-2">Valor</th>
+    <th className="text-right py-2">Cantidad</th>
+    <th className="text-right py-2">MXP invertidos</th>
+    <th className="text-right py-2">Ganancia / pérdida</th>
+    <th className="text-right py-2">Fecha</th>
+    <th className="text-right py-2">Acción</th>
+  </tr>
+</thead>
+<tbody>
+  {txs
+    .filter((t) => {
+      const v = values[t.valueId];
+      const posLong = positions[t.valueId + "_false"] || positions[t.valueId];
+      const posShort = positions[t.valueId + "_true"];
+      const stillOpen =
+        ((posLong?.qty ?? 0) > 0 && t.type === "BUY") ||
+        ((posShort?.qty ?? 0) > 0 && t.type === "SELL");
+      return showClosed ? true : stillOpen;
+    })
+    .slice(-20)
+    .reverse()
+    .map((t) => {
+      const v = values[t.valueId];
+      const posLong = positions[t.valueId + "_false"] || positions[t.valueId];
+      const posShort = positions[t.valueId + "_true"];
+      const isGuter = v?.categoryId?.toLowerCase?.() === "guter";
+      const puedeCerrar =
+        !isGuter &&
+        (((posLong?.qty ?? 0) > 0 && t.type === "BUY") ||
+          ((posShort?.qty ?? 0) > 0 && t.type === "SELL"));
 
-              const isGuter = v?.categoryId?.toLowerCase?.() === "guter";
-              const puedeCerrar =
-                !isGuter &&
-                (((posLong?.qty ?? 0) > 0 && t.type === "BUY") ||
-                  ((posShort?.qty ?? 0) > 0 && t.type === "SELL"));
+      // 💹 Cálculo de ganancia/pérdida desde precio de compra
+      const current = v?.price ?? 0;
+      const entryPrice =
+        t.qty && t.qty > 0 ? Math.abs(t.deltaPoints) / t.qty : 0;
+      const profit = (current - entryPrice) * (t.qty ?? 0);
+      const profitPct =
+        entryPrice > 0 ? (profit / (entryPrice * (t.qty ?? 0))) * 100 : 0;
 
-              return (
-                <tr
-                  key={t.id}
-                  className="border-b border-neutral-800 hover:bg-neutral-800/50"
-                >
-                  <td
-                    className={
-                      "py-2 font-medium " +
-                      (t.type === "BUY"
-                        ? "text-emerald-400"
-                        : t.type === "SELL"
-                        ? "text-red-400"
-                        : "text-neutral-300")
-                    }
-                  >
-                    {t.type}
-                  </td>
-                  <td className="py-2 text-neutral-300">{t.valueId}</td>
-                  <td className="py-2 text-right">
-                    {t.qty ? t.qty.toFixed(3) : "—"}
-                  </td>
-                  <td
-                    className={
-                      "py-2 text-right " +
-                      (t.deltaPoints >= 0
-                        ? "text-emerald-400"
-                        : "text-red-400")
-                    }
-                  >
-                    {t.deltaPoints >= 0 ? "+" : ""}
-                    {fmt.format(t.deltaPoints)}
-                  </td>
-                  <td className="py-2 text-right text-neutral-500 text-xs">
-                    {new Date(t.ts).toLocaleString("es-MX", {
-                      timeZone: "America/Mexico_City",
-                      hour12: true,
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </td>
-                  <td className="py-2 text-right">
-                    {puedeCerrar && (
-                      <button
-                        onClick={() =>
-                          handleClosePosition(
-                            t.valueId,
-                            v?.price ?? 0,
-                            (posShort?.qty ?? 0) > 0
-                          )
-                        }
-                        className="bg-blue-600 hover:bg-blue-500 px-3 py-0.5 rounded-lg text-xs font-medium transition"
-                      >
-                        Cerrar
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
+      return (
+        <tr
+          key={t.id}
+          className="border-b border-neutral-800 hover:bg-neutral-800/50"
+        >
+          <td
+            className={
+              "py-2 font-medium " +
+              (t.type === "BUY"
+                ? "text-emerald-400"
+                : t.type === "SELL"
+                ? "text-red-400"
+                : "text-neutral-300")
+            }
+          >
+            {t.type}
+          </td>
+          <td className="py-2 text-neutral-300">{t.valueId}</td>
+          <td className="py-2 text-right">
+            {t.qty ? t.qty.toFixed(3) : "—"}
+          </td>
+
+          {/* MXP invertidos */}
+          <td className="py-2 text-right text-neutral-300">
+            {fmt.format(Math.abs(t.deltaPoints))}
+          </td>
+
+          {/* Ganancia / pérdida */}
+          <td
+            className={
+              "py-2 text-right font-medium " +
+              (profit > 0
+                ? "text-emerald-400"
+                : profit < 0
+                ? "text-red-400"
+                : "text-neutral-400")
+            }
+          >
+            {entryPrice === 0 || !isFinite(profit)
+              ? "—"
+              : `${profit >= 0 ? "+" : ""}${fmt.format(profit)} (${profitPct.toFixed(2)}%)`}
+          </td>
+
+          <td className="py-2 text-right text-neutral-500 text-xs">
+            {new Date(t.ts).toLocaleString("es-MX", {
+              timeZone: "America/Mexico_City",
+              hour12: true,
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
             })}
-        </tbody>
+          </td>
+
+          <td className="py-2 text-right">
+            {puedeCerrar && (
+              <button
+                onClick={() =>
+                  handleClosePosition(
+                    t.valueId,
+                    v?.price ?? 0,
+                    (posShort?.qty ?? 0) > 0
+                  )
+                }
+                className="bg-blue-600 hover:bg-blue-500 px-3 py-0.5 rounded-lg text-xs font-medium transition"
+              >
+                Cerrar
+              </button>
+            )}
+          </td>
+        </tr>
+      );
+    })}
+</tbody>
+
       </table>
     </div>
   )}
@@ -1602,83 +1664,83 @@ useEffect(() => {
 {/* ==== Modal de Gráfico (con zoom, arrastre y parpadeo) ==== */}
 {chartFor && selected && (
   <div
-    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-    onWheel={(e) => e.stopPropagation()}
+    className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm p-0"
   >
+    {/* Contenedor desplazable separado */}
     <div
-  className="w-full max-w-2xl rounded-2xl bg-neutral-950 border border-neutral-800 p-5"
-  style={{ overflow: "hidden" }} // ✅ fuerza ocultar scrolls verticales
->
-
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <div className="text-xs text-neutral-400">Gráfico de velas</div>
-          <div className="text-lg font-semibold">{selected.name}</div>
-          <div className="text-xs text-neutral-500">{selected.description}</div>
-        </div>
-        <button
-          onClick={() => setChartFor(null)}
-          className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700"
-        >
-          Cerrar
-        </button>
-      </div>
-
-{(derivedCandles?.length ?? 0) > 0 ? (
-  <>
-    {/* 🔹 Info y botón de cierre (solo si hay posición abierta) */}
-    {positions[chartFor]?.qty > 0 && (
-  <div className="mb-4 text-right">
-    {(() => {
-      const pos = positions[chartFor];
-      const current = selected.price ?? 0;
-      const invested = pos.avgPrice * pos.qty;
-      const currentValue = current * pos.qty;
-      const profit = currentValue - invested;
-      const profitPct = invested > 0 ? (profit / invested) * 100 : 0;
-
-      
-
-      return (
-        <div
-          className={
-            "text-sm mb-2 " +
-            (profit >= 0 ? "text-emerald-400" : "text-red-400")
-          }
-        >
-          Ganancia/pérdida actual:{" "}
-          {profit >= 0 ? "+" : ""}
-          {fmt.format(profit)} MXP ({profitPct.toFixed(2)}%)
-        </div>
-      );
-    })()}
-
-    <button
-      onClick={() => handleClosePosition(chartFor, selected.price ?? 0)}
-      className="bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-lg text-sm font-medium transition"
+      className="flex-1 w-full overflow-auto candle-scroll-container"
+      style={{
+        WebkitOverflowScrolling: "touch",
+        touchAction: "pan-x pan-y",
+        overscrollBehavior: "contain",
+      }}
     >
-      Cerrar inversión
-    </button>
-  </div>
-)}
+      <div
+        className="mx-auto mt-10 mb-10 w-full max-w-2xl rounded-2xl bg-neutral-950 border border-neutral-800 p-5 relative"
+      >
+        <div className="flex items-start justify-between mb-3 sticky top-0 bg-neutral-950 z-10">
+          <div>
+            <div className="text-xs text-neutral-400">Gráfico de velas</div>
+            <div className="text-lg font-semibold">{selected.name}</div>
+            <div className="text-xs text-neutral-500">{selected.description}</div>
+          </div>
+          <button
+            onClick={() => setChartFor(null)}
+            className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700"
+          >
+            Cerrar
+          </button>
+        </div>
 
+        {(derivedCandles?.length ?? 0) > 0 ? (
+          <>
+            {positions[chartFor]?.qty > 0 && (
+              <div className="mb-4 text-right">
+                {(() => {
+                  const pos = positions[chartFor];
+                  const current = selected.price ?? 0;
+                  const invested = pos.avgPrice * pos.qty;
+                  const currentValue = current * pos.qty;
+                  const profit = currentValue - invested;
+                  const profitPct = invested > 0 ? (profit / invested) * 100 : 0;
+                  return (
+                    <div
+                      className={
+                        "text-sm mb-2 " +
+                        (profit >= 0 ? "text-emerald-400" : "text-red-400")
+                      }
+                    >
+                      Ganancia/pérdida actual:{" "}
+                      {profit >= 0 ? "+" : ""}
+                      {fmt.format(profit)} MXP ({profitPct.toFixed(2)}%)
+                    </div>
+                  );
+                })()}
+                <button
+                  onClick={() => handleClosePosition(chartFor, selected.price ?? 0)}
+                  className="bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-lg text-sm font-medium transition"
+                >
+                  Cerrar inversión
+                </button>
+              </div>
+            )}
 
-<ZoomableCandleWrapper
-  candles={derivedCandles}
-  chartFor={chartFor}
-  tf={tf}
-/>
-
-  </>
-) : (
-  <div className="text-sm text-neutral-400">
-    Aún no hay velas para esta temporalidad. Espera unos segundos…
-  </div>
-)}
-
+            <ZoomableCandleWrapper
+              candles={derivedCandles}
+              chartFor={chartFor}
+              tf={tf}
+            />
+          </>
+        ) : (
+          <div className="text-sm text-neutral-400">
+            Aún no hay velas para esta temporalidad. Espera unos segundos…
+          </div>
+        )}
+      </div>
     </div>
   </div>
 )}
+
 
 
       {/* ==== Modal de Login ==== */}
