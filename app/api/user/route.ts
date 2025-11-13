@@ -7,15 +7,20 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+    const idString = searchParams.get("id");
 
-    if (!id) {
+    if (!idString) {
       return NextResponse.json({ ok: false, error: "Falta el id" });
     }
 
-    // busca el usuario por ID NUMÉRICO
+    const id = Number(idString);
+
+    if (isNaN(id)) {
+      return NextResponse.json({ ok: false, error: "ID inválido" });
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id },
+      where: { id }, // tu id es INT, así que esto es perfecto
       select: { id: true, name: true, points: true }
     });
 
@@ -24,8 +29,9 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ ok: true, user });
+
   } catch (err) {
-    console.error("Error en /api/user:", err);
+    console.error("❌ Error interno en /api/user:", err);
     return NextResponse.json({ ok: false, error: "Error interno" });
   }
 }
