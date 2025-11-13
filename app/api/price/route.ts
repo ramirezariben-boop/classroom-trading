@@ -1,4 +1,3 @@
-// app/api/price/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs";
 import fsp from "fs/promises";
@@ -9,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // ===== CONFIGURACIÓN =====
-const QUIET_MODE = true; // 💤 Silencia logs extensos en local
+const QUIET_MODE = true; // 💤 Silencia logs extensos
 const DEFAULT_LIMIT = 300; // Máximo de velas por activo y temporalidad
 
 // ===== Catálogo base =====
@@ -106,47 +105,6 @@ async function initializeLastPrices() {
   if (!QUIET_MODE) console.log(`✅ Últimos precios cargados: ${state.lastPrices.size}`);
 }
 
-const TIMEFRAMES = [
-  { label: "5m", ms: 5 * 60_000 },
-  { label: "15m", ms: 15 * 60_000 },
-  { label: "1h", ms: 60 * 60_000 },
-  { label: "4h", ms: 4 * 60 * 60_000 },
-  { label: "1d", ms: 24 * 60 * 60_000 },
-  { label: "1w", ms: 7 * 24 * 60 * 60_000 },
-];
-
-async function updateActiveCandle(id: string, price: number, now: number) {
-  const ops = [];
-  for (const { label, ms } of TIMEFRAMES) {
-    const key = `${id}-${label}`;
-    const currentBucket = Math.floor(now / ms) * ms;
-    let active = state.activeCandles.get(key);
-    if (!active) {
-      active = { open: price, high: price, low: price, close: price, startedAt: currentBucket };
-      state.activeCandles.set(key, active);
-    }
-    const activeBucket = Math.floor(active.startedAt / ms) * ms;
-    if (currentBucket > activeBucket) {
-      ops.push({
-        valueId: id,
-        timeframe: label,
-        time: new Date(active.startedAt),
-        ts: new Date(now),
-        open: active.open,
-        high: active.high,
-        low: active.low,
-        close: active.close,
-      });
-      active = { open: price, high: price, low: price, close: price, startedAt: currentBucket };
-      state.activeCandles.set(key, active);
-    }
-    active.close = price;
-    if (price > active.high) active.high = price;
-    if (price < active.low) active.low = price;
-  }
-  if (ops.length) await prisma.candle.createMany({ data: ops, skipDuplicates: true });
-}
-
 // ===== Handler principal =====
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -154,7 +112,21 @@ export async function GET(req: Request) {
 
   console.time("⏱ Price API");
 
-  // Normalización
+  // ⚡ Si el servidor recién inició, evita ticks atrasados
+  if (state.lastTick === 0) {
+    state.lastTick = Date.now();
+  }
+
+  // 🟢 Solo lectura — no genera velas ni modifica precios
+  if (mode === "read" || mode === "readonly") {
+    if (state.lastPrices.size === 0) await initializeLastPrices();
+    await updateIndicatorsFromFactors();
+    const out = Object.fromEntries(state.lastPrices);
+    console.timeEnd("⏱ Price API");
+    return NextResponse.json({ ok: true, mode: "readonly", prices: out });
+  }
+
+  // 🌿 Normalización (ajuste suave)
   if (mode === "normalize") {
     if (state.lastPrices.size === 0) await initializeLastPrices();
     const factor = 0.3;
@@ -171,24 +143,38 @@ export async function GET(req: Request) {
     });
   }
 
-  await updateIndicatorsFromFactors();
-
-  // Lectura simple
-  if (mode === "read") {
+  // 🧱 Restablecer todos los activos a su precio base (DEFAULTS)
+  if (mode === "base" || mode === "reset") {
     if (state.lastPrices.size === 0) await initializeLastPrices();
-    const out = Object.fromEntries(state.lastPrices);
+
+    for (const [id, base] of Object.entries(DEFAULTS)) {
+      state.lastPrices.set(id, base);
+    }
+
+    state.lastTick = Date.now(); // sincroniza el tick
     console.timeEnd("⏱ Price API");
-    return NextResponse.json({ ok: true, prices: out });
+    if (!QUIET_MODE) console.log("🔁 Todos los activos regresaron a su precio base.");
+
+    return NextResponse.json({
+      ok: true,
+      reset: true,
+      message: "Todos los activos regresaron a su valor base (DEFAULTS).",
+      prices: Object.fromEntries(state.lastPrices),
+    });
   }
+
+
+  // 🚫 Desactiva la creación automática de velas
+  // (Solo se actualizan los precios en memoria)
+  await updateIndicatorsFromFactors();
+  if (state.lastPrices.size === 0) await initializeLastPrices();
 
   const factors = loadFactors();
   const now = Date.now();
   const TICK_MS = (factors.tickSeconds ?? 7) * 1000;
-  if (state.lastPrices.size === 0) await initializeLastPrices();
+  const steps = 1; // ⚠️ siempre 1 → no intenta "ponerse al día"
 
-  const steps = Math.max(1, Math.floor((now - state.lastTick) / TICK_MS));
   for (let s = 0; s < steps; s++) {
-    const tNow = now - (steps - 1 - s) * TICK_MS;
     for (const [id, base] of Object.entries(DEFAULTS)) {
       const mu = base;
       const prev = state.lastPrices.get(id) ?? mu;
@@ -209,7 +195,6 @@ export async function GET(req: Request) {
       if (Math.abs(next - prev) < 0.0001) next = prev + (Math.random() - 0.5) * 0.0002;
 
       state.lastPrices.set(id, next);
-      await updateActiveCandle(id, next, tNow);
     }
   }
 
@@ -217,7 +202,10 @@ export async function GET(req: Request) {
   const out = Object.fromEntries(state.lastPrices);
 
   console.timeEnd("⏱ Price API");
-  if (!QUIET_MODE) console.log(`✅ ${Object.keys(out).length} precios actualizados.`);
+  if (!QUIET_MODE) console.log(`✅ ${Object.keys(out).length} precios actualizados (sin nuevas velas).`);
 
-  return NextResponse.json({ ok: true, prices: out, ts: now }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(
+    { ok: true, prices: out, ts: now },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }

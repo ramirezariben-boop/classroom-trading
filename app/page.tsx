@@ -856,86 +856,87 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6">
+
+
       {/* ==== Header ==== */}
-      <header className="mb-6 flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">📈 Classroom Trading</h1>
-          <p className="text-neutral-400">
-            {user ? (
-              <>Willkommen, <span className="font-semibold">{user.name}</span>. Du hast {fmt.format(points)} MXP </>
-            ) : (
-              <>Willkommen, {student.name}. Du hast {fmt.format(student.points)} MXP (Modo demo)</>
-            )}
-          </p>
+     <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+  {/* === Título y saludo === */}
+  <div>
+    <h1 className="text-2xl font-bold">📈 Classroom Trading</h1>
+    <p className="text-neutral-400">
+      {user ? (
+        <>Willkommen, <span className="font-semibold">{user.name}</span>. Du hast {fmt.format(points)} MXP </>
+      ) : (
+        <>Willkommen, {student.name}. Du hast {fmt.format(student.points)} MXP (Modo demo)</>
+      )}
+    </p>
 
-          {factors?.note && (
-            <div className="text-xs text-neutral-500 mt-1">
-              {factors.note}{" "}
-              {factors.updatedAt && (
-                <>
-                  · <span className="opacity-70">Actualizado: {new Date(factors.updatedAt).toLocaleString()}</span>
-                </>
-              )}
-            </div>
-          )}
+    {factors?.note && (
+      <div className="text-xs text-neutral-500 mt-1">
+        {factors.note}{" "}
+        {factors.updatedAt && (
+          <>
+            · <span className="opacity-70">Actualizado: {new Date(factors.updatedAt).toLocaleString()}</span>
+          </>
+        )}
+      </div>
+    )}
+  </div>
+
+  {/* === Controles superiores === */}
+  <div className="flex flex-wrap justify-center sm:justify-end items-center gap-2">
+    {/* Selector de temporalidad */}
+    <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl p-1">
+      {TIMEFRAMES.map((opt) => (
+        <button
+          key={opt.id}
+          onClick={() => setTf(opt)}
+          className={
+            "px-2.5 py-1 text-sm rounded-lg transition " +
+            (tf.id === opt.id ? "bg-blue-600" : "hover:bg-neutral-800")
+          }
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+
+    {/* Panel de factores */}
+    {user?.role === "ADMIN" && (
+      <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl p-2">
+        <div className="text-xs text-neutral-400">
+          Δ vistas 24h:{" "}
+          <span className="text-white font-medium">
+            {typeof factors?.views24hPct === "number" ? `${factors.views24hPct}%` : "—"}
+          </span>
         </div>
+        <a href="/api/factors" target="_blank" className="text-xs bg-neutral-800 hover:bg-neutral-700 rounded px-2 py-1">
+          /api/factors
+        </a>
+      </div>
+    )}
 
-        <div className="flex items-center gap-2">
-          {/* Selector de temporalidad */}
-          <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl p-1">
-            {TIMEFRAMES.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => setTf(opt)}
-                className={
-                  "px-2.5 py-1 text-sm rounded-lg transition " +
-                  (tf.id === opt.id ? "bg-blue-600" : "hover:bg-neutral-800")
-                }
-                title={`Reagrupar en ${opt.label}`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+    {/* Sesión */}
+    <div className="w-full sm:w-auto text-center">
+      {user ? (
+        <button
+          onClick={handleLogout}
+          className="mt-2 sm:mt-0 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 w-full sm:w-auto"
+        >
+          Cerrar sesión
+        </button>
+      ) : (
+        <button
+          onClick={() => setLoginOpen(true)}
+          className="mt-2 sm:mt-0 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 w-full sm:w-auto"
+        >
+          Iniciar sesión
+        </button>
+      )}
+    </div>
+  </div>
+</header>
 
-          {/* Panel de factores */}
-          {user?.role === "ADMIN" && (
-            <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl p-2">
-              <div className="text-xs text-neutral-400">
-                Δ vistas 24h:{" "}
-                <span className="text-white font-medium">
-                  {typeof factors?.views24hPct === "number" ? `${factors.views24hPct}%` : "—"}
-                </span>
-              </div>
-              <a
-                href="/api/factors"
-                target="_blank"
-                className="text-xs bg-neutral-800 hover:bg-neutral-700 rounded px-2 py-1"
-              >
-                /api/factors
-              </a>
-              <a
-                href="/factors.txt"
-                target="_blank"
-                className="text-xs bg-neutral-800 hover:bg-neutral-700 rounded px-2 py-1"
-              >
-                /factors.txt
-              </a>
-            </div>
-          )}
-
-          {/* Sesión */}
-          {user ? (
-            <button onClick={handleLogout} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700">
-              Cerrar sesión
-            </button>
-          ) : (
-            <button onClick={() => setLoginOpen(true)} className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500">
-              Iniciar sesión
-            </button>
-          )}
-        </div>
-      </header>
 
 {/* ==== Resumen global del portafolio ==== */}
 {user && (
