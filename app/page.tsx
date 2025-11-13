@@ -280,12 +280,6 @@ export default function Page() {
   );
   const [txs, setTxs] = useState<Tx[]>([]);
   const [history, setHistory] = useState<Record<string, Candle[]>>({});
-  const [candlesBase, setCandlesBase] = useState<Record<string, Candle[]>>(() => {
-    const now = Date.now();
-    return Object.fromEntries(
-      DEFAULT_VALUES.map((v) => [v.id, [{ time: now, open: v.price, high: v.price, low: v.price, close: v.price }]])
-    );
-  });
   const [trade, setTrade] = useState<{ mode: "BUY" | "SELL"; valueId: string } | null>(null);
   const [qty, setQty] = useState(1);
   const [pendingBook, setPendingBook] = useState<{ valueId: string; title: string } | null>(null);
@@ -358,52 +352,26 @@ useEffect(() => {
 
       console.log("💰 Precios recibidos:", data);
 
-setValues((prev) => {
-  const next = { ...prev };
-  const now = Date.now();
+      setValues((prev) => {
+        const next = { ...prev };
+        const now = Date.now();
 
-  for (const [id, price] of Object.entries(data.prices || {})) {
-    const old = next[id];
-    const changePct = old?.price
-      ? +(((Number(price) - old.price) / Math.max(1e-9, old.price)) * 100).toFixed(2)
-      : 0;
+        for (const [id, price] of Object.entries(data.prices || {})) {
+          const old = next[id];
+          const changePct = old?.price
+            ? +(((Number(price) - old.price) / Math.max(1e-9, old.price)) * 100).toFixed(2)
+            : 0;
 
-    next[id] = {
-      ...(old || {}),
-      price: Number(price),
-      changePct,
-      updatedAt: now,
-    };
-  }
+          next[id] = {
+            ...(old || {}),
+            price: Number(price),
+            changePct,
+            updatedAt: now,
+          };
+        }
 
-  return next;
-});
-
-// 🔁 Sincroniza la última vela visible con los precios actuales
-setHistory((prevHist) => {
-  const updatedHist = { ...prevHist };
-  const now = Date.now();
-
-  for (const [id, price] of Object.entries(data.prices || {})) {
-    const arr = updatedHist[id] ?? [];
-    if (arr.length > 0) {
-      const last = { ...arr[arr.length - 1] };
-      last.close = Number(price);
-      last.high = Math.max(last.high, Number(price));
-      last.low = Math.min(last.low, Number(price));
-      last.time = now; // marca momento actual
-      arr[arr.length - 1] = last;
-      updatedHist[id] = [...arr];
-    } else {
-      updatedHist[id] = [
-        { time: now, open: Number(price), high: Number(price), low: Number(price), close: Number(price) },
-      ];
-    }
-  }
-
-  return updatedHist;
-});
-
+        return next;
+      });
     } catch (err) {
       console.error("❌ Error al cargar precios:", err);
     }
@@ -882,87 +850,86 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6">
-
-
       {/* ==== Header ==== */}
-     <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-  {/* === Título y saludo === */}
-  <div>
-    <h1 className="text-2xl font-bold">📈 Classroom Trading</h1>
-    <p className="text-neutral-400">
-      {user ? (
-        <>Willkommen, <span className="font-semibold">{user.name}</span>. Du hast {fmt.format(points)} MXP </>
-      ) : (
-        <>Willkommen, {student.name}. Du hast {fmt.format(student.points)} MXP (Modo demo)</>
-      )}
-    </p>
+      <header className="mb-6 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">📈 Classroom Trading</h1>
+          <p className="text-neutral-400">
+            {user ? (
+              <>Willkommen, <span className="font-semibold">{user.name}</span>. Du hast {fmt.format(points)} MXP </>
+            ) : (
+              <>Willkommen, {student.name}. Du hast {fmt.format(student.points)} MXP (Modo demo)</>
+            )}
+          </p>
 
-    {factors?.note && (
-      <div className="text-xs text-neutral-500 mt-1">
-        {factors.note}{" "}
-        {factors.updatedAt && (
-          <>
-            · <span className="opacity-70">Actualizado: {new Date(factors.updatedAt).toLocaleString()}</span>
-          </>
-        )}
-      </div>
-    )}
-  </div>
-
-  {/* === Controles superiores === */}
-  <div className="flex flex-wrap justify-center sm:justify-end items-center gap-2">
-    {/* Selector de temporalidad */}
-    <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl p-1">
-      {TIMEFRAMES.map((opt) => (
-        <button
-          key={opt.id}
-          onClick={() => setTf(opt)}
-          className={
-            "px-2.5 py-1 text-sm rounded-lg transition " +
-            (tf.id === opt.id ? "bg-blue-600" : "hover:bg-neutral-800")
-          }
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-
-    {/* Panel de factores */}
-    {user?.role === "ADMIN" && (
-      <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl p-2">
-        <div className="text-xs text-neutral-400">
-          Δ vistas 24h:{" "}
-          <span className="text-white font-medium">
-            {typeof factors?.views24hPct === "number" ? `${factors.views24hPct}%` : "—"}
-          </span>
+          {factors?.note && (
+            <div className="text-xs text-neutral-500 mt-1">
+              {factors.note}{" "}
+              {factors.updatedAt && (
+                <>
+                  · <span className="opacity-70">Actualizado: {new Date(factors.updatedAt).toLocaleString()}</span>
+                </>
+              )}
+            </div>
+          )}
         </div>
-        <a href="/api/factors" target="_blank" className="text-xs bg-neutral-800 hover:bg-neutral-700 rounded px-2 py-1">
-          /api/factors
-        </a>
-      </div>
-    )}
 
-    {/* Sesión */}
-    <div className="w-full sm:w-auto text-center">
-      {user ? (
-        <button
-          onClick={handleLogout}
-          className="mt-2 sm:mt-0 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 w-full sm:w-auto"
-        >
-          Cerrar sesión
-        </button>
-      ) : (
-        <button
-          onClick={() => setLoginOpen(true)}
-          className="mt-2 sm:mt-0 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 w-full sm:w-auto"
-        >
-          Iniciar sesión
-        </button>
-      )}
-    </div>
-  </div>
-</header>
+        <div className="flex items-center gap-2">
+          {/* Selector de temporalidad */}
+          <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl p-1">
+            {TIMEFRAMES.map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setTf(opt)}
+                className={
+                  "px-2.5 py-1 text-sm rounded-lg transition " +
+                  (tf.id === opt.id ? "bg-blue-600" : "hover:bg-neutral-800")
+                }
+                title={`Reagrupar en ${opt.label}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
 
+          {/* Panel de factores */}
+          {user?.role === "ADMIN" && (
+            <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl p-2">
+              <div className="text-xs text-neutral-400">
+                Δ vistas 24h:{" "}
+                <span className="text-white font-medium">
+                  {typeof factors?.views24hPct === "number" ? `${factors.views24hPct}%` : "—"}
+                </span>
+              </div>
+              <a
+                href="/api/factors"
+                target="_blank"
+                className="text-xs bg-neutral-800 hover:bg-neutral-700 rounded px-2 py-1"
+              >
+                /api/factors
+              </a>
+              <a
+                href="/factors.txt"
+                target="_blank"
+                className="text-xs bg-neutral-800 hover:bg-neutral-700 rounded px-2 py-1"
+              >
+                /factors.txt
+              </a>
+            </div>
+          )}
+
+          {/* Sesión */}
+          {user ? (
+            <button onClick={handleLogout} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700">
+              Cerrar sesión
+            </button>
+          ) : (
+            <button onClick={() => setLoginOpen(true)} className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500">
+              Iniciar sesión
+            </button>
+          )}
+        </div>
+      </header>
 
 {/* ==== Resumen global del portafolio ==== */}
 {user && (
@@ -1097,15 +1064,7 @@ useEffect(() => {
                         <div
                           onClick={() => {
                             setChartFor(v.id);
-                            setCandlesBase((prev) => {
-                              if (prev?.[v.id]?.length) return prev;
-                              const p = values[v.id].price;
-                              const now = Date.now();
-                              return {
-                                ...prev,
-                                [v.id]: [{ time: now, open: p, high: p, low: p, close: p }],
-                              };
-                            });
+                            
                           }}
                           className="flex items-center justify-between cursor-pointer hover:bg-neutral-900/50 rounded-xl p-2 transition"
                           title="Ver gráfico"

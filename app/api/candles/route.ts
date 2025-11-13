@@ -17,11 +17,15 @@ export async function GET(req: Request) {
     }
 
     const rows = await prisma.candle.findMany({
-      where: { valueId: id, timeframe: tf },
+      where: {
+        valueId: id,
+        timeframe: tf,
+      },
       orderBy: { time: "asc" },
       take: limit,
     });
 
+    // Convertimos a segundos unix (TradingView estándar)
     const candles = rows.map((r) => ({
       time: r.time.getTime(),
       open: r.open,

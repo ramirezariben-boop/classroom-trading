@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 
-// ====== CONFIG GENERAL ======
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// ====== CATALOGO BASE (fallback) ======
 const DEFAULTS: Record<string, number> = {
   baumxp: 126, dsgmxp: 110, rftmxp: 96,
   krimxp: 46, grmmxp: 46, litmxp: 53, hormxp: 57,
@@ -18,49 +16,32 @@ const DEFAULTS: Record<string, number> = {
   gzehntel: 13.4, gkrimi: 46, ggramm: 46, glit: 53, ghor: 57,
 };
 
-// ====== ESTADO EN MEMORIA ======
-export const state = {
-  lastPrices: new Map<string, number>(),
-  lastUpdate: Date.now(),
-};
-
-// ====== MAIN HANDLER ======
-export async function GET(req: Request) {
-  console.time("⏱ Price API");
-
+export async function GET() {
   try {
-    // 1️⃣ Intenta leer precios reales desde la BD
-    const dbValues = await prisma.value.findMany({
-      select: { id: true, price: true },
-    });
+    const result: Record<string, number> = {};
 
-    // Limpia el mapa de memoria
-    state.lastPrices.clear();
+    // 1️⃣ Recorremos cada valor posible del catálogo
+    for (const id of Object.keys(DEFAULTS)) {
 
-    // 2️⃣ Carga los precios desde BD o fallback
-    for (const [id, val] of Object.entries(DEFAULTS)) {
-      const dbVal = dbValues.find((v) => v.id === id);
-      const finalPrice = dbVal?.price ?? val;
-      state.lastPrices.set(id, finalPrice);
+      // Buscar la ÚLTIMA vela
+      const lastCandle = await prisma.candle.findFirst({
+        where: { valueId: id },
+        orderBy: { time: "desc" },
+      });
+
+      if (lastCandle) {
+        // Si hay vela → usamos su CLOSE REAL
+        result[id] = lastCandle.close;
+      } else {
+        // Si no hay nada → fallback
+        result[id] = DEFAULTS[id];
+      }
     }
 
-    // 3️⃣ Prepara salida
-    const prices: Record<string, number> = {};
-    for (const [id, price] of state.lastPrices.entries()) {
-      prices[id] = price;
-    }
+    return NextResponse.json({ ok: true, prices: result });
 
-    state.lastUpdate = Date.now();
-
-    console.timeEnd("⏱ Price API");
-    return NextResponse.json({
-      ok: true,
-      total: Object.keys(prices).length,
-      lastUpdate: new Date(state.lastUpdate).toISOString(),
-      prices,
-    });
   } catch (err) {
-    console.error("❌ Error en /api/price:", err);
-    return NextResponse.json({ ok: false, error: "Error interno en Price API" }, { status: 500 });
+    console.error("❌ Error en Price API:", err);
+    return NextResponse.json({ ok: false }, { status: 500 });
   }
 }
