@@ -358,26 +358,52 @@ useEffect(() => {
 
       console.log("💰 Precios recibidos:", data);
 
-      setValues((prev) => {
-        const next = { ...prev };
-        const now = Date.now();
+setValues((prev) => {
+  const next = { ...prev };
+  const now = Date.now();
 
-        for (const [id, price] of Object.entries(data.prices || {})) {
-          const old = next[id];
-          const changePct = old?.price
-            ? +(((Number(price) - old.price) / Math.max(1e-9, old.price)) * 100).toFixed(2)
-            : 0;
+  for (const [id, price] of Object.entries(data.prices || {})) {
+    const old = next[id];
+    const changePct = old?.price
+      ? +(((Number(price) - old.price) / Math.max(1e-9, old.price)) * 100).toFixed(2)
+      : 0;
 
-          next[id] = {
-            ...(old || {}),
-            price: Number(price),
-            changePct,
-            updatedAt: now,
-          };
-        }
+    next[id] = {
+      ...(old || {}),
+      price: Number(price),
+      changePct,
+      updatedAt: now,
+    };
+  }
 
-        return next;
-      });
+  return next;
+});
+
+// 🔁 Sincroniza la última vela visible con los precios actuales
+setHistory((prevHist) => {
+  const updatedHist = { ...prevHist };
+  const now = Date.now();
+
+  for (const [id, price] of Object.entries(data.prices || {})) {
+    const arr = updatedHist[id] ?? [];
+    if (arr.length > 0) {
+      const last = { ...arr[arr.length - 1] };
+      last.close = Number(price);
+      last.high = Math.max(last.high, Number(price));
+      last.low = Math.min(last.low, Number(price));
+      last.time = now; // marca momento actual
+      arr[arr.length - 1] = last;
+      updatedHist[id] = [...arr];
+    } else {
+      updatedHist[id] = [
+        { time: now, open: Number(price), high: Number(price), low: Number(price), close: Number(price) },
+      ];
+    }
+  }
+
+  return updatedHist;
+});
+
     } catch (err) {
       console.error("❌ Error al cargar precios:", err);
     }
