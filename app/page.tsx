@@ -635,7 +635,7 @@ const mapped = data.txs.map((t) => ({
   type: t.type,
   valueId: t.valueId,
   qty: t.qty,
-  deltaPoints: Number(t.deltaPoints ?? t.deltaPts ?? 0),
+  deltaPoints: Number(t.deltaPts ?? t.deltaPoints ?? 0),
   note: t.note,
 }));
 
@@ -667,7 +667,7 @@ const mapped = data.txs.map((t) => ({
       type: (t.type as any) ?? "RESET",
       valueId: t.valueId,
       qty: t.qty,
-      deltaPoints: Number(t.deltaPts),
+      deltaPoints: Number(t.deltaPts ?? t.deltaPoints ?? 0),
       note: t.note,
       userId: t.userId,
       userName: t.userName,
