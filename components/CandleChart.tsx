@@ -135,10 +135,13 @@ export default function CandleChart({
       for (let i = 0; i < view.length; i += step) {
         const c = view[i];
         const date = new Date(c.time);
-        const label = date.toLocaleTimeString("es-MX", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
+const label = date.toLocaleString("es-MX", {
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
         const x = (i - (offset / barWidth - start)) * barWidth + 4;
         ctx.fillText(label, x, H - 2);
       }
@@ -225,7 +228,6 @@ export default function CandleChart({
         height={height}
         style={{
           width: "100%",
-          height,
           display: "block",
           cursor: "grab", // 🖐️ mano abierta
         }}
@@ -235,8 +237,8 @@ export default function CandleChart({
         style={{
           color: "#aaa",
           fontSize: "12px",
-          marginTop: "6px",
-          height: "16px",
+          marginTop: "0px",
+          height: "12px",
           textAlign: "center",
           transition: "opacity 0.3s",
         }}

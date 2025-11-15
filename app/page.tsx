@@ -98,10 +98,12 @@ function ZoomableCandleWrapper({
   candles,
   chartFor,
   tf,
+  setTf,
 }: {
   candles: Candle[];
   chartFor: string;
-  tf: { id: string };
+  tf: Timeframe;
+  setTf: (tf: Timeframe) => void;
 }) {
   const [visibleCount, setVisibleCount] = useState(16);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -191,13 +193,16 @@ useEffect(() => {
     <div
   className="relative candle-scroll-container"
 style={{
-  height: "60vh",
   maxHeight: 400,
   WebkitOverflowScrolling: "touch",
   touchAction: "pan-x pan-y",
 }}
 
 >
+
+
+
+
 
       {/* Contenedor scrollable */}
       <div
@@ -216,26 +221,25 @@ style={{
         <style>{`div::-webkit-scrollbar { display: none; }`}</style>
 
         <div
-          className="transition-all duration-300 h-full"
+         className="transition-all duration-300"
           style={{
             minWidth: `${Math.max(900, visibleCandles.length * 8)}px`,
             marginLeft: "48px", // espacio para eje Y fijo
           }}
         >
-          <div style={{ height: 300 }}>
-            <CandleChart
-              key={chartFor + tf.id + visibleCount}
-              candles={visibleCandles}
-              height={300}
-              xTicks={6}
-              yTicks={4}
-              bodyWidthRatio={0.4}
-              yMin={yMin}
-              yMax={yMax}
-              highlightLast={true}
-              showYAxis={false}
-            />
-          </div>
+<CandleChart
+  key={chartFor + tf.id + visibleCount}
+  candles={visibleCandles}
+  height={300}
+  xTicks={6}
+  yTicks={4}
+  bodyWidthRatio={0.4}
+  yMin={yMin}
+  yMax={yMax}
+  highlightLast={true}
+  showYAxis={false}
+/>
+
         </div>
       </div>
 
@@ -851,7 +855,9 @@ useEffect(() => {
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6">
       {/* ==== Header ==== */}
-      <header className="mb-6 flex items-center justify-between gap-4">
+      <header className="mb-6 flex items-center justify-between gap-4 max-w-6xl mx-auto w-full">
+
+
         <div>
           <h1 className="text-2xl font-bold">📈 Classroom Trading</h1>
           <p className="text-neutral-400">
@@ -875,22 +881,9 @@ useEffect(() => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Selector de temporalidad */}
-          <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl p-1">
-            {TIMEFRAMES.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => setTf(opt)}
-                className={
-                  "px-2.5 py-1 text-sm rounded-lg transition " +
-                  (tf.id === opt.id ? "bg-blue-600" : "hover:bg-neutral-800")
-                }
-                title={`Reagrupar en ${opt.label}`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+
+
+         
 
           {/* Panel de factores */}
           {user?.role === "ADMIN" && (
@@ -1664,19 +1657,41 @@ useEffect(() => {
       <div
         className="mx-auto mt-10 mb-10 w-full max-w-2xl rounded-2xl bg-neutral-950 border border-neutral-800 p-5 relative"
       >
-        <div className="flex items-start justify-between mb-3 sticky top-0 bg-neutral-950 z-10">
-          <div>
-            <div className="text-xs text-neutral-400">Gráfico de velas</div>
-            <div className="text-lg font-semibold">{selected.name}</div>
-            <div className="text-xs text-neutral-500">{selected.description}</div>
-          </div>
-          <button
-            onClick={() => setChartFor(null)}
-            className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700"
-          >
-            Cerrar
-          </button>
-        </div>
+<div className="flex items-start justify-between mb-3 sticky top-0 bg-neutral-950 z-10">
+  <div>
+    <div className="text-xs text-neutral-400">Gráfico de velas</div>
+    <div className="text-lg font-semibold">{selected.name}</div>
+    <div className="text-xs text-neutral-500">{selected.description}</div>
+  </div>
+
+  {/* === Botones (nuevo) + Cerrar === */}
+  <div className="flex items-center gap-2">
+    <div className="flex gap-1 bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1 text-xs">
+      {["5m", "15m", "1h", "4h", "1d", "1w"].map((id) => (
+        <button
+          key={id}
+          onClick={() => setTf(TIMEFRAMES.find((t) => t.id === id)!)}
+          className={
+            "px-2 py-0.5 rounded-md transition " +
+            (tf.id === id
+              ? "bg-blue-600 text-white"
+              : "text-neutral-300 hover:bg-neutral-700")
+          }
+        >
+          {id.toUpperCase()}
+        </button>
+      ))}
+    </div>
+
+    <button
+      onClick={() => setChartFor(null)}
+      className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700"
+    >
+      Cerrar
+    </button>
+  </div>
+</div>
+
 
         {(derivedCandles?.length ?? 0) > 0 ? (
           <>
@@ -1711,11 +1726,13 @@ useEffect(() => {
               </div>
             )}
 
-            <ZoomableCandleWrapper
-              candles={derivedCandles}
-              chartFor={chartFor}
-              tf={tf}
-            />
+<ZoomableCandleWrapper
+  candles={derivedCandles}
+  chartFor={chartFor}
+  tf={tf}
+  setTf={setTf}
+/>
+
           </>
         ) : (
           <div className="text-sm text-neutral-400">
