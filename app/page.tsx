@@ -635,7 +635,11 @@ for (const p of data.positions) {
     // 🔹 Actualizar transacciones recientes
 const mapped = data.txs.map((t) => ({
   id: t.id,
-  ts: typeof t.ts === "string" ? t.ts : new Date(t.ts).toISOString(),
+  ts:
+  typeof t.ts === "number"
+    ? new Date(t.ts * (t.ts < 2e12 ? 1000 : 1)).toISOString()
+    : new Date(t.ts).toISOString(),
+
   type: t.type,
   valueId: t.valueId,
   qty: t.qty,
@@ -643,7 +647,14 @@ const mapped = data.txs.map((t) => ({
   note: t.note,
 }));
 
-    if (txScope === "me") setTxs(mapped);
+    if (txScope === "me") {
+  setTxs(
+    mapped.slice().sort(
+      (a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()
+    )
+  );
+}
+
 
     console.log("🧾 Portafolio actualizado:", {
       points: data.points,
@@ -664,18 +675,23 @@ const mapped = data.txs.map((t) => ({
     const res = await fetch(`/api/txs?scope=${scope}`);
     if (!res.ok) throw new Error("Error al cargar transacciones");
     const data = await res.json();
-    return data.txs.map((t: any) => ({
-      id: t.id,
-      ts: typeof t.ts === "string" ? t.ts : new Date(t.ts).toISOString(),
+    return data.txs
+  .map((t: any) => ({
+    id: t.id,
+    ts:
+      typeof t.ts === "number"
+        ? new Date(t.ts * (t.ts < 2e12 ? 1000 : 1)).toISOString()
+        : new Date(t.ts).toISOString(),
+    type: t.type,
+    valueId: t.valueId,
+    qty: t.qty,
+    deltaPoints: Number(t.deltaPts ?? t.deltaPoints ?? 0),
+    note: t.note,
+    userId: t.userId,
+    userName: t.userName,
+  }))
+  .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
 
-      type: (t.type as any) ?? "RESET",
-      valueId: t.valueId,
-      qty: t.qty,
-      deltaPoints: Number(t.deltaPts ?? t.deltaPoints ?? 0),
-      note: t.note,
-      userId: t.userId,
-      userName: t.userName,
-    }));
   }
 
 // === Trading ===
@@ -1298,109 +1314,117 @@ useEffect(() => {
 </thead>
 <tbody>
   {txs
-    .filter((t) => {
-      const v = values[t.valueId];
-      const posLong = positions[t.valueId + "_false"] || positions[t.valueId];
-      const posShort = positions[t.valueId + "_true"];
-      const stillOpen =
-        ((posLong?.qty ?? 0) > 0 && t.type === "BUY") ||
-        ((posShort?.qty ?? 0) > 0 && t.type === "SELL");
-      return showClosed ? true : stillOpen;
-    })
-    .slice(-20)
-    .reverse()
-    .map((t) => {
-      const v = values[t.valueId];
-      const posLong = positions[t.valueId + "_false"] || positions[t.valueId];
-      const posShort = positions[t.valueId + "_true"];
-      const isGuter = v?.categoryId?.toLowerCase?.() === "guter";
-      const puedeCerrar =
-        !isGuter &&
-        (((posLong?.qty ?? 0) > 0 && t.type === "BUY") ||
-          ((posShort?.qty ?? 0) > 0 && t.type === "SELL"));
+  .slice()
+  .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+  .filter((t) => {
+    const v = values[t.valueId];
+    const posLong = positions[t.valueId + "_false"] || positions[t.valueId];
+    const posShort = positions[t.valueId + "_true"];
+    const stillOpen =
+      ((posLong?.qty ?? 0) > 0 && t.type === "BUY") ||
+      ((posShort?.qty ?? 0) > 0 && t.type === "SELL");
 
-      // 💹 Cálculo de ganancia/pérdida desde precio de compra
-      const current = v?.price ?? 0;
-      const entryPrice =
-        t.qty && t.qty > 0 ? Math.abs(t.deltaPoints) / t.qty : 0;
-      const profit = (current - entryPrice) * (t.qty ?? 0);
-      const profitPct =
-        entryPrice > 0 ? (profit / (entryPrice * (t.qty ?? 0))) * 100 : 0;
+    return showClosed ? true : stillOpen;
+  })
+  .slice(0, 20)
+  .map((t) => {
+    const v = values[t.valueId];
+    const posLong = positions[t.valueId + "_false"] || positions[t.valueId];
+    const posShort = positions[t.valueId + "_true"];
+    const isGuter = v?.categoryId?.toLowerCase?.() === "guter";
 
-      return (
-        <tr
-          key={t.id}
-          className="border-b border-neutral-800 hover:bg-neutral-800/50"
+    const puedeCerrar =
+      !isGuter &&
+      (((posLong?.qty ?? 0) > 0 && t.type === "BUY") ||
+        ((posShort?.qty ?? 0) > 0 && t.type === "SELL"));
+
+    const current = v?.price ?? 0;
+    const entryPrice =
+      t.qty && t.qty > 0 ? Math.abs(t.deltaPoints) / t.qty : 0;
+
+    const profit = (current - entryPrice) * (t.qty ?? 0);
+    const profitPct =
+      entryPrice > 0
+        ? (profit / (entryPrice * (t.qty ?? 0))) * 100
+        : 0;
+
+    return (
+      <tr
+        key={t.id}
+        className="border-b border-neutral-800 hover:bg-neutral-800/50"
+      >
+        <td
+          className={
+            "py-2 font-medium " +
+            (t.type === "BUY"
+              ? "text-emerald-400"
+              : t.type === "SELL"
+              ? "text-red-400"
+              : "text-neutral-300")
+          }
         >
-          <td
-            className={
-              "py-2 font-medium " +
-              (t.type === "BUY"
-                ? "text-emerald-400"
-                : t.type === "SELL"
-                ? "text-red-400"
-                : "text-neutral-300")
-            }
-          >
-            {t.type}
-          </td>
-          <td className="py-2 text-neutral-300">{t.valueId}</td>
-          <td className="py-2 text-right">
-            {t.qty ? t.qty.toFixed(3) : "—"}
-          </td>
+          {t.type}
+        </td>
 
-          {/* MXP invertidos */}
-          <td className="py-2 text-right text-neutral-300">
-            {fmt.format(Math.abs(t.deltaPoints))}
-          </td>
+        <td className="py-2 text-neutral-300">{t.valueId}</td>
 
-          {/* Ganancia / pérdida */}
-          <td
-            className={
-              "py-2 text-right font-medium " +
-              (profit > 0
-                ? "text-emerald-400"
-                : profit < 0
-                ? "text-red-400"
-                : "text-neutral-400")
-            }
-          >
-            {entryPrice === 0 || !isFinite(profit)
-              ? "—"
-              : `${profit >= 0 ? "+" : ""}${fmt.format(profit)} (${profitPct.toFixed(2)}%)`}
-          </td>
+        <td className="py-2 text-right">
+          {t.qty ? t.qty.toFixed(3) : "—"}
+        </td>
 
-          <td className="py-2 text-right text-neutral-500 text-xs">
-            {new Date(t.ts).toLocaleString("es-MX", {
-              timeZone: "America/Mexico_City",
-              hour12: true,
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </td>
+        <td className="py-2 text-right text-neutral-300">
+          {fmt.format(Math.abs(t.deltaPoints))}
+        </td>
 
-          <td className="py-2 text-right">
-            {puedeCerrar && (
-              <button
-                onClick={() =>
-                  handleClosePosition(
-                    t.valueId,
-                    v?.price ?? 0,
-                    (posShort?.qty ?? 0) > 0
-                  )
-                }
-                className="bg-blue-600 hover:bg-blue-500 px-3 py-0.5 rounded-lg text-xs font-medium transition"
-              >
-                Cerrar
-              </button>
-            )}
-          </td>
-        </tr>
-      );
-    })}
+        <td
+          className={
+            "py-2 text-right font-medium " +
+            (profit > 0
+              ? "text-emerald-400"
+              : profit < 0
+              ? "text-red-400"
+              : "text-neutral-400")
+          }
+        >
+          {entryPrice === 0 || !isFinite(profit)
+            ? "—"
+            : `${profit >= 0 ? "+" : ""}${fmt.format(
+                profit
+              )} (${profitPct.toFixed(2)}%)`}
+        </td>
+
+        <td className="py-2 text-right text-neutral-500 text-xs">
+          {new Date(t.ts).toLocaleString("es-MX", {
+            timeZone: "America/Mexico_City",
+            hour12: true,
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </td>
+
+        <td className="py-2 text-right">
+          {puedeCerrar && (
+            <button
+              onClick={() =>
+                handleClosePosition(
+                  t.valueId,
+                  v?.price ?? 0,
+                  (posShort?.qty ?? 0) > 0
+                )
+              }
+              className="bg-blue-600 hover:bg-blue-500 px-3 py-0.5 rounded-lg text-xs font-medium transition"
+            >
+              Cerrar
+            </button>
+          )}
+        </td>
+      </tr>
+    );
+  })}
+
 </tbody>
 
       </table>
@@ -1566,7 +1590,6 @@ useEffect(() => {
 
               {txs
                 .slice()
-                .reverse()
                 .map((t) => (
                   <div
                     key={t.id}
