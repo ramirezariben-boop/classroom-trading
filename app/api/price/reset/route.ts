@@ -9,17 +9,19 @@ import { priceState } from "../state";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// === HANDLER PRINCIPAL ===
 export async function GET() {
   console.time("⏱ Reset Price API");
 
-  // 1️⃣ Copia de los precios base
+  // 🔥 Asegurar que no siga modo velas
+  priceState.forceValuePrice = false;
+
+  // 1️⃣ Copia base
   let DEFAULTS = { ...BASE_DEFAULTS };
 
-  // 2️⃣ Aplicar indicadores dinámicos
+  // 2️⃣ Indicadores
   DEFAULTS = await updateIndicators(DEFAULTS);
 
-  // 3️⃣ Guardar en la base de datos
+  // 3️⃣ Guardar en BD
   for (const [id, base] of Object.entries(DEFAULTS)) {
     await prisma.value.updateMany({
       where: { id },
@@ -27,7 +29,7 @@ export async function GET() {
     });
   }
 
-  // 4️⃣ Forzar a usar los precios guardados en BD
+  // 4️⃣ Activar que PRICE lea DB
   priceState.forceValuePrice = true;
 
   console.timeEnd("⏱ Reset Price API");
